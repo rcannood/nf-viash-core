@@ -1,0 +1,27 @@
+name: sub_workflow
+arguments:
+  - name: "--file"
+    type: file
+    direction: input
+  - name: "--output"
+    type: file
+    direction: output
+  - name: "--required_int"
+    type: integer
+    direction: output
+    required: true
+  - name: "--multiple_strings"
+    direction: output
+    type: string
+    multiple: true
+    required: true
+resources:
+  - type: nextflow_script
+    path: main.nf
+    entrypoint: base
+dependencies:
+  - name: step1
+engines:
+  - type: native
+runners:
+  - type: nextflow
