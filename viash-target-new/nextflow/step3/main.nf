@@ -11,6 +11,7 @@
 
 include { 
   processConfig;
+  readYaml;
   readJsonBlob;
   getRootDir;
   deepClone;
@@ -332,147 +333,7 @@ def workflowFactory(Map args, Map defaultWfArgs, Map meta) {
 // create meta object
 meta = [
   "resources_dir": moduleDir.toRealPath().normalize(),
-  "config": processConfig(readJsonBlob('''{
-  "name" : "step3",
-  "argument_groups" : [
-    {
-      "name" : "Arguments",
-      "arguments" : [
-        {
-          "type" : "file",
-          "name" : "--input",
-          "example" : [
-            "input.txt"
-          ],
-          "must_exist" : true,
-          "create_parent" : true,
-          "required" : true,
-          "direction" : "input",
-          "multiple" : true,
-          "multiple_sep" : ";"
-        },
-        {
-          "type" : "file",
-          "name" : "--output",
-          "example" : [
-            "output.txt"
-          ],
-          "must_exist" : true,
-          "create_parent" : true,
-          "required" : true,
-          "direction" : "output",
-          "multiple" : false,
-          "multiple_sep" : ";"
-        }
-      ]
-    }
-  ],
-  "resources" : [
-    {
-      "type" : "bash_script",
-      "path" : "script.sh",
-      "is_executable" : true
-    }
-  ],
-  "status" : "enabled",
-  "scope" : {
-    "image" : "public",
-    "target" : "public"
-  },
-  "runners" : [
-    {
-      "type" : "nextflow",
-      "id" : "nextflow",
-      "directives" : {
-        "tag" : "$id"
-      },
-      "auto" : {
-        "simplifyInput" : true,
-        "simplifyOutput" : false,
-        "transcript" : false,
-        "publish" : false
-      },
-      "config" : {
-        "labels" : {
-          "mem1gb" : "memory = 1000000000.B",
-          "mem2gb" : "memory = 2000000000.B",
-          "mem5gb" : "memory = 5000000000.B",
-          "mem10gb" : "memory = 10000000000.B",
-          "mem20gb" : "memory = 20000000000.B",
-          "mem50gb" : "memory = 50000000000.B",
-          "mem100gb" : "memory = 100000000000.B",
-          "mem200gb" : "memory = 200000000000.B",
-          "mem500gb" : "memory = 500000000000.B",
-          "mem1tb" : "memory = 1000000000000.B",
-          "mem2tb" : "memory = 2000000000000.B",
-          "mem5tb" : "memory = 5000000000000.B",
-          "mem10tb" : "memory = 10000000000000.B",
-          "mem20tb" : "memory = 20000000000000.B",
-          "mem50tb" : "memory = 50000000000000.B",
-          "mem100tb" : "memory = 100000000000000.B",
-          "mem200tb" : "memory = 200000000000000.B",
-          "mem500tb" : "memory = 500000000000000.B",
-          "mem1gib" : "memory = 1073741824.B",
-          "mem2gib" : "memory = 2147483648.B",
-          "mem4gib" : "memory = 4294967296.B",
-          "mem8gib" : "memory = 8589934592.B",
-          "mem16gib" : "memory = 17179869184.B",
-          "mem32gib" : "memory = 34359738368.B",
-          "mem64gib" : "memory = 68719476736.B",
-          "mem128gib" : "memory = 137438953472.B",
-          "mem256gib" : "memory = 274877906944.B",
-          "mem512gib" : "memory = 549755813888.B",
-          "mem1tib" : "memory = 1099511627776.B",
-          "mem2tib" : "memory = 2199023255552.B",
-          "mem4tib" : "memory = 4398046511104.B",
-          "mem8tib" : "memory = 8796093022208.B",
-          "mem16tib" : "memory = 17592186044416.B",
-          "mem32tib" : "memory = 35184372088832.B",
-          "mem64tib" : "memory = 70368744177664.B",
-          "mem128tib" : "memory = 140737488355328.B",
-          "mem256tib" : "memory = 281474976710656.B",
-          "mem512tib" : "memory = 562949953421312.B",
-          "cpu1" : "cpus = 1",
-          "cpu2" : "cpus = 2",
-          "cpu5" : "cpus = 5",
-          "cpu10" : "cpus = 10",
-          "cpu20" : "cpus = 20",
-          "cpu50" : "cpus = 50",
-          "cpu100" : "cpus = 100",
-          "cpu200" : "cpus = 200",
-          "cpu500" : "cpus = 500",
-          "cpu1000" : "cpus = 1000"
-        }
-      },
-      "debug" : false,
-      "container" : "docker"
-    }
-  ],
-  "engines" : [
-    {
-      "type" : "native",
-      "id" : "native"
-    },
-    {
-      "type" : "docker",
-      "id" : "docker",
-      "image" : "nextflow/bash:latest",
-      "namespace_separator" : "/"
-    }
-  ],
-  "build_info" : {
-    "config" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src/step3/config.vsh.yaml",
-    "runner" : "nextflow",
-    "engine" : "native|docker",
-    "output" : "viash-target/nextflow/step3",
-    "viash_version" : "0.10.0-dev",
-    "git_commit" : "9873ecf2bfb409d039bc25160a50d07123b69913"
-  },
-  "package_config" : {
-    "source" : "viash-src",
-    "target" : "viash-target"
-  }
-}'''))
+  "config": processConfig(readYaml("${moduleDir}/.config.vsh.yaml"))
 ]
 
 // resolve dependencies dependencies (if any)
