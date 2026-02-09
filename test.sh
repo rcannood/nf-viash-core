@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-## VIASH START
-## VIASH END
-
 # Helper function to check output with verbose error messages
 check_output() {
   local pattern="$1"
@@ -21,7 +18,7 @@ check_output() {
 
 # Set up temporary directory and environment variables for the test
 export VIASH_KEEP_WORK_DIR=silent
-export VIASH_TEMP=$meta_temp_dir/temp
+export VIASH_TEMP=temp
 mkdir -p $VIASH_TEMP
 
 echo ">>> Checking whether expected resources exist"

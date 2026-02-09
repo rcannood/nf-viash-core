@@ -1,0 +1,3 @@
+name: nf-viash
+source: viash-src
+target: viash-target

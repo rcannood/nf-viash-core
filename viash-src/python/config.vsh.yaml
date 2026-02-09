@@ -1,0 +1,16 @@
+__merge__: [., ../common.yaml, ../common-runners.yaml]
+name: test_languages_python
+resources:
+  - type: python_script
+    path: code.py
+engines:
+  - type: native
+  - type: docker
+    image: python
+    setup:
+      - type: docker
+        build_args:
+          - TESTING_FOO=bar
+      - type: python
+        packages:
+          - "argparse<1.4"
