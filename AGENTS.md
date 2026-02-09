@@ -16,7 +16,8 @@ Key context documents: `additional-info.md` (project goals/challenges), `WORKPLA
 - **Plugin tests**: `src/test/groovy/dataintuitive/plugin/` — Spock framework tests
 - **Active development target**: `viash-target-new/nextflow/` — The working copy where we develop against. This is the code we edit.
   - `viash-target-new/nextflow/VDSL3Helper.nf` — Extracted shared helper functions (~2480 lines). Imported by each module via `include { ... } from '../VDSL3Helper.nf'`.
-  - `viash-target-new/nextflow/*/main.nf` — Slim component-specific modules (~700–1000 lines each). Contains config JSON, `innerWorkflowFactory`, `workflowFactory` (which has `workflow {}` blocks and can't be in VDSL3Helper.nf), `meta`, defaults, and the anonymous entrypoint workflow.
+  - `viash-target-new/nextflow/*/main.nf` — Slim component-specific modules (~465–866 lines each). Contains `innerWorkflowFactory`, `workflowFactory` (which has `workflow {}` blocks and can't be in VDSL3Helper.nf), `meta`, defaults, and the anonymous entrypoint workflow.
+  - `viash-target-new/nextflow/*/.config.vsh.yaml` — Component config read at runtime via `readYaml()`. Previously inlined as a JSON blob in each `main.nf`.
 - **Reference code (read-only)**: `viash-target/nextflow/*/main.nf` — Original generated Nextflow modules with all ~2800 lines of VDSL3 code inlined per file. Do NOT edit. Regenerate with `viash ns build -s viash-src -t viash-target`. Use as reference to verify behavior equivalence.
 - **Source components**: `viash-src/` — Viash component definitions (configs + scripts). Rebuild with `viash ns build -s viash-src -t viash-target`.
 - **Validation pipeline**: `validation/main.nf` — Minimal NF pipeline for integration testing the plugin.

@@ -14,12 +14,13 @@ Move ~2793 lines of duplicated VDSL3 helper code from each generated `main.nf` i
 ### Original state (`viash-target/`)
 Each generated `main.nf` contains:
 - Lines 1–2793: Shared VDSL3 helpers (identical across all modules)
-- Lines 2794+: Component-specific code (config JSON, innerWorkflowFactory, meta, defaults, entrypoint workflow)
+- Lines 2794+: Component-specific code (config JSON blob, innerWorkflowFactory, meta, defaults, entrypoint workflow)
 
 ### Intermediate state (`viash-target-new/`) ← WE ARE HERE
-Shared helpers extracted into a single file, per-module code slimmed down:
+Shared helpers extracted into a single file, per-module code slimmed down, config externalized:
 - `viash-target-new/nextflow/VDSL3Helper.nf` (~2480 lines): Most shared functions, imported via `include { ... } from '../VDSL3Helper.nf'`
-- `viash-target-new/nextflow/*/main.nf` (~700–1000 lines each): Component-specific code + `workflowFactory` (which contains `workflow {}` DSL blocks and can't be moved to an include file)
+- `viash-target-new/nextflow/*/main.nf` (~465–866 lines each): Component-specific code + `workflowFactory` (which contains `workflow {}` DSL blocks and can't be moved to an include file)
+- `viash-target-new/nextflow/*/.config.vsh.yaml`: Component config read at runtime via `readYaml()` (previously inlined as a JSON blob in each `main.nf`)
 - All modules must behave identically to their `viash-target/` counterparts
 
 ### Target state
@@ -121,7 +122,7 @@ Helper classes:
 ### Category G: Component-specific (STAYS in main.nf)
 | Item | Description |
 |------|-------------|
-| `meta` object | Config JSON blob, resources_dir |
+| `meta` object | Reads config from `.config.vsh.yaml`, resources_dir |
 | `innerWorkflowFactory` | Component's script or workflow reference |
 | `vdsl3WorkflowFactory` | Dynamic process creation for script components |
 | `_vdsl3ProcessFactory` | Runtime process generation |
