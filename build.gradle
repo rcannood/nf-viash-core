@@ -7,11 +7,10 @@ version = '0.1.0'
 nextflowPlugin {
     nextflowVersion = '24.10.0'
 
-    provider = 'dataintuitive'
-    className = 'dataintuitive.plugin.NfViashPlugin'
+    provider = 'viash'
+    className = 'io.viash.viash_core.ViashCorePlugin'
     extensionPoints = [
-        'dataintuitive.plugin.NfViashExtension',
-        'dataintuitive.plugin.NfViashFactory'
+        'io.viash.viash_core.ViashCoreExtension'
     ]
 
     publishing {

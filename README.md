@@ -1,4 +1,4 @@
-# nf-viash plugin
+# viash_core plugin
 
 ## Building
 
@@ -12,7 +12,7 @@ make assemble
 The plugin can be tested without a local Nextflow installation:
 
 1. Build and install the plugin to your local Nextflow installation: `make install`
-2. Run a pipeline with the plugin: `nextflow run hello -plugins nf-viash@0.1.0`
+2. Run a pipeline with the plugin: `nextflow run hello -plugins viash_core@0.1.0`
 
 ## Publishing
 

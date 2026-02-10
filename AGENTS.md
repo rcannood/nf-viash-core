@@ -1,18 +1,16 @@
-# Copilot Instructions for nf-viash
+# Copilot Instructions for viash_core
 
 ## Project Overview
 
-This is a **Nextflow plugin** (`nf-viash`) written in **Groovy**, built with Gradle. Its goal is to extract ~2800 lines of shared VDSL3 helper code that is currently duplicated in every viash-generated `main.nf` Nextflow module, moving it into a reusable plugin.
+This is a **Nextflow plugin** (`viash_core`) written in **Groovy**, built with Gradle. Its goal is to extract ~2800 lines of shared VDSL3 helper code that is currently duplicated in every viash-generated `main.nf` Nextflow module, moving it into a reusable plugin.
 
 Key context documents: `additional-info.md` (project goals/challenges), `WORKPLAN.md` (phased migration plan with function inventory).
 
 ## Architecture
 
 - **Plugin source**: `src/main/groovy/dataintuitive/plugin/` — Groovy classes using Nextflow's plugin API
-  - `NfViashPlugin.groovy` — Plugin entry point (extends `BasePlugin`)
-  - `NfViashExtension.groovy` — Functions exposed via `@Function` annotation (importable in NF scripts via `include { fn } from 'plugin/nf-viash'`)
-  - `NfViashFactory.groovy` — Creates `TraceObserver` instances
-  - `NfViashObserver.groovy` — Lifecycle hooks (`onFlowCreate`, `onFlowComplete`)
+  - `ViashCorePlugin.groovy` — Plugin entry point (extends `BasePlugin`)
+  - `ViashCoreExtension.groovy` — Functions exposed via `@Function` annotation (importable in NF scripts via `include { fn } from 'plugin/viash_core'`)
 - **Plugin tests**: `src/test/groovy/dataintuitive/plugin/` — Spock framework tests
 - **Active development target**: `viash-target-new/nextflow/` — The working copy where we develop against. This is the code we edit.
   - `viash-target-new/nextflow/VDSL3Helper.nf` — Extracted shared helper functions (~2480 lines). Imported by each module via `include { ... } from '../VDSL3Helper.nf'`.
@@ -60,7 +58,7 @@ Clean up after integration tests: `rm -rf .nextflow* work output`
 
 - **Plugin extension points** use Nextflow annotations: `@Function` for importable functions, `@Operator` for channel operators, `@Factory` for channel factories. These are defined in classes extending `PluginExtensionPoint` and registered in `build.gradle` under `extensionPoints`.
 - **Groovy, not Nextflow DSL**: Plugin code cannot define `workflow {}` or `process {}` blocks directly. Dynamic process/workflow creation must use Nextflow internals (`ScriptMeta`, `ScriptParser`).
-- **Test framework**: Spock (specs extend `Specification`, tests use `given:`/`when:`/`then:` blocks). See `NfViashObserverTest.groovy` for the pattern.
+- **Test framework**: Spock (specs extend `Specification`, tests use `given:`/`when:`/`then:` blocks).
 - **Externally-consumed functions**: `runEach`, `findStates`, `setState` are used by workflows that `include` viash modules. These must remain accessible and backwards-compatible.
 
 ## Working with Code
@@ -70,7 +68,7 @@ We are actively developing in `viash-target-new/nextflow/`. The migration procee
 
 1. Identify a function in `viash-target-new/nextflow/VDSL3Helper.nf` or a shared pattern in `viash-target-new/nextflow/*/main.nf`
 2. Port it to Groovy in `src/main/groovy/dataintuitive/plugin/`
-3. Expose it via `@Function` in `NfViashExtension.groovy` (or appropriate extension point)
+3. Expose it via `@Function` in `ViashCoreExtension.groovy` (or appropriate extension point)
 4. Write a Spock test in `src/test/groovy/dataintuitive/plugin/`
 5. Update `viash-target-new/nextflow/*/main.nf` to `include` it from the plugin instead of `VDSL3Helper.nf`
 6. Verify with `make test` and `nextflow run viash-target-new/nextflow/test_wfs/.../main.nf`
