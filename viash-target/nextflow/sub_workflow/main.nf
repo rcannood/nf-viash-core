@@ -2938,7 +2938,7 @@ meta = [
     }
   ],
   "build_info" : {
-    "config" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src/sub_workflow/config.vsh.yaml",
+    "config" : "/home/rcannood/workspace/viash-io/viash_core/viash-src/sub_workflow/config.vsh.yaml",
     "runner" : "nextflow",
     "engine" : "native",
     "output" : "viash-target/nextflow/sub_workflow",

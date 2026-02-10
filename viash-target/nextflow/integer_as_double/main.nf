@@ -2941,7 +2941,7 @@ meta = [
     }
   ],
   "build_info" : {
-    "config" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src/integer_as_double/config.vsh.yaml",
+    "config" : "/home/rcannood/workspace/viash-io/viash_core/viash-src/integer_as_double/config.vsh.yaml",
     "runner" : "nextflow",
     "engine" : "native|docker",
     "output" : "viash-target/nextflow/integer_as_double",

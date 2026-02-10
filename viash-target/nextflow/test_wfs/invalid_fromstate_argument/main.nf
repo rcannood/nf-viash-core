@@ -2900,7 +2900,7 @@ meta = [
     }
   ],
   "build_info" : {
-    "config" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src/test_wfs/invalid_fromstate_argument/config.vsh.yaml",
+    "config" : "/home/rcannood/workspace/viash-io/viash_core/viash-src/test_wfs/invalid_fromstate_argument/config.vsh.yaml",
     "runner" : "nextflow",
     "engine" : "native",
     "output" : "viash-target/nextflow/test_wfs/invalid_fromstate_argument",

@@ -2930,7 +2930,7 @@ meta = [
     }
   ],
   "build_info" : {
-    "config" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src/multiple_output/config.vsh.yaml",
+    "config" : "/home/rcannood/workspace/viash-io/viash_core/viash-src/multiple_output/config.vsh.yaml",
     "runner" : "nextflow",
     "engine" : "native|docker",
     "output" : "viash-target/nextflow/multiple_output",
