@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dataintuitive.plugin
+package io.viash.viash_core
 
 import groovy.transform.CompileStatic
 import nextflow.plugin.BasePlugin
@@ -24,9 +24,9 @@ import org.pf4j.PluginWrapper
  * The plugin entry point
  */
 @CompileStatic
-class NfViashPlugin extends BasePlugin {
+class ViashCorePlugin extends BasePlugin {
 
-    NfViashPlugin(PluginWrapper wrapper) {
+    ViashCorePlugin(PluginWrapper wrapper) {
         super(wrapper)
     }
 }
