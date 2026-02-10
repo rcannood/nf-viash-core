@@ -1,33 +1,82 @@
-# viash_core plugin
+# viash-core Plugin
 
-## Building
+A Nextflow plugin that extracts reusable utilities from viash-generated workflow components, reducing code duplication and improving maintainability.
 
-To build the plugin:
+## What is this?
+
+viash-core is a proof-of-concept Nextflow plugin that moves ~2800 lines of duplicated helper code from individual viash-generated Nextflow modules into a reusable plugin. The plugin provides utilities for configuration handling, serialization, state management, channel operations, and debugging.
+
+## Getting Started
+
+### Build and Install
+
 ```bash
-make assemble
+make assemble      # Compile and package plugin
+make install       # Install to ~/.nextflow/plugins
+make test          # Run unit tests
 ```
 
-## Testing with Nextflow
+### Run Test Workflows
 
-The plugin can be tested without a local Nextflow installation:
+```bash
+# Single component
+nextflow run viash-target-new/nextflow/step1/main.nf \
+    --id foo --input "resources/lines*.txt" --publish_dir output
 
-1. Build and install the plugin to your local Nextflow installation: `make install`
-2. Run a pipeline with the plugin: `nextflow run hello -plugins viash-core@0.1.0`
+# Workflow with multiple steps
+nextflow run viash-target-new/nextflow/test_wfs/runeach/main.nf --publish_dir output
+```
 
-## Publishing
+### Quick Verification
 
-Plugins can be published to a central plugin registry to make them accessible to the Nextflow community. 
+```bash
+./scripts/verify.sh --quick    # Build + unit tests
+./scripts/verify.sh --full     # Build + tests + install + integration tests
+```
 
+## Project Structure
 
-Follow these steps to publish the plugin to the Nextflow Plugin Registry:
+- **`src/main/groovy/io/viash/viash_core/`** — Plugin implementation (Groovy)
+  - `ViashCoreExtension.groovy` — All exportable functions via @Function, @Factory, @Operator annotations
+  - `ViashCorePlugin.groovy` — Plugin entry point
+  - `config/`, `state/`, `io/`, `util/`, `help/` — Utility modules
+- **`src/test/groovy/`** — Unit tests (Spock framework)
+- **`viash-target-new/nextflow/`** — Generated test workflows using the plugin
+- **`viash-target/nextflow/`** — Reference: original components for comparison
 
-1. Create a file named `$HOME/.gradle/gradle.properties`, where $HOME is your home directory. Add the following properties:
+## Development
 
-    * `pluginRegistry.accessToken`: Your Nextflow Plugin Registry access token. 
+### Key Architecture
 
-2. Use the following command to package and create a release for your plugin on GitHub: `make release`.
+Plugin functions are exposed via Nextflow plugin API:
+- **@Function** — Pure functions available via `include { fn } from 'plugin/viash-core'`
+- **@Factory** — Channel factories like `fromViashParams()`
+- **@Operator** — Channel operators like `debug()` and `niceView()`
 
+### Adding a Function
 
-> [!NOTE]
-> The Nextflow Pluging registry is currently avaialable as private beta technology. Contact info@nextflow.io to learn how to get access to it.
-> 
+1. Implement in appropriate utility class under `src/main/groovy/io/viash/viash_core/`
+2. Expose via `@Function` annotation in `ViashCoreExtension.groovy`
+3. Add unit test in `src/test/groovy/`
+4. Update workflows to use it via `include`
+5. Run `make test` to verify
+
+### Important Notes
+
+- **Target Nextflow version**: 24.10.0+ (tested with 25.04.x)
+- **Cannot define workflows in plugin** — `workflow {}` blocks must stay in individual component `main.nf` files
+- **Backwards compatibility** — Changes to public APIs must maintain compatibility with existing workflows
+
+## Common Commands
+
+```bash
+make clean         # Remove build artifacts
+make test          # Run all Spock tests
+make assemble      # Build plugin zip only (no install)
+```
+
+## References
+
+- [additional-info.md](additional-info.md) — Project goals and challenges
+- [AGENTS.md](AGENTS.md) — AI assistant instructions
+- [Nextflow plugin docs](https://www.nextflow.io/docs/latest/plugins/developing-plugins.html)

@@ -1,22 +1,20 @@
 plugins {
-    id 'io.nextflow.nextflow-plugin' version '0.0.1-alpha4'
+    id 'io.nextflow.nextflow-plugin' version '1.0.0-beta.10'
 }
 
 version = '0.1.0'
 
+repositories {
+    mavenCentral()
+}
+
 nextflowPlugin {
     nextflowVersion = '24.10.0'
 
-    provider = 'viash'
+    description = 'Utility plugin for Viash components.'
+    provider = 'Viash'
     className = 'io.viash.viash_core.ViashCorePlugin'
     extensionPoints = [
         'io.viash.viash_core.ViashCoreExtension'
     ]
-
-    publishing {
-        registry {
-            url = 'https://nf-plugins-registry.dev-tower.net/api'
-            authToken = project.findProperty('pluginRegistry.accessToken')
-        }
-    }
 }
