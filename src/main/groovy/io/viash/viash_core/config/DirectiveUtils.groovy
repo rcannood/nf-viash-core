@@ -1,20 +1,27 @@
 package io.viash.viash_core.config
 
+import io.viash.viash_core.util.NextflowHelper
+
 /**
  * Directive validation and processing utilities for Nextflow process directives.
- * Pure Groovy — no Nextflow dependencies (except for params reference in container
- * override which is handled by passing it as a parameter).
  */
 class DirectiveUtils {
 
   /**
    * Validate and normalize Nextflow process directives.
+   * Reads the container registry override from NF params automatically.
    *
    * @param drctv The directives map (will be cloned, not modified in place).
-   * @param containerRegistryOverride Optional override for container registry (from env or params).
+   * @param containerRegistryOverride Optional explicit override for container registry.
+   *        If null, reads from params.override_container_registry.
    * @return The validated and normalized directives map.
    */
   static Map processDirectives(Map drctv, String containerRegistryOverride = null) {
+    // If no explicit override, read from NF params
+    if (containerRegistryOverride == null) {
+      containerRegistryOverride = NextflowHelper.getParam("override_container_registry") as String
+    }
+
     // remove null values
     drctv = drctv.findAll { k, v -> v != null }
 

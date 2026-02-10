@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 /**
  * Path resolution and filesystem utilities.
- * These are pure Groovy — no Nextflow dependencies.
  */
 class PathUtils {
 
@@ -71,5 +70,45 @@ class PathUtils {
     def dir = findBuildYamlFile(resourcesDir)
     assert dir != null : "Could not find .build.yaml in the folder structure"
     dir.getParent()
+  }
+
+  /**
+   * Resolve a file path string to a Path, using Nextflow's file() when
+   * a session is available, or Paths.get() as a fallback (e.g. in tests).
+   *
+   * @param path The path string to resolve.
+   * @param fileResolver Optional override closure for tests.
+   * @return A Path (or whatever the resolver returns).
+   */
+  static Object resolveFile(String path, Closure fileResolver = null) {
+    if (fileResolver != null) {
+      return fileResolver(path)
+    }
+    if (nextflow.Global.session != null) {
+      return nextflow.Nextflow.file([hidden: true], path)
+    }
+    return java.nio.file.Paths.get(path)
+  }
+
+  /**
+   * Resolve a path relative to a sibling if it's not absolute.
+   *
+   * @param str The path to resolve (may be a String or any object).
+   *        Non-String values are returned as-is.
+   * @param parentPath The path to resolve relative to (should have resolveSibling method).
+   * @param fileResolver Optional closure to resolve absolute path strings.
+   *        If null, uses resolveFile() which delegates to nextflow.Nextflow.file()
+   *        or Paths.get() depending on context.
+   * @return The resolved path.
+   */
+  static Object resolveSiblingIfNotAbsolute(Object str, Object parentPath, Closure fileResolver = null) {
+    if (!(str instanceof String)) {
+      return str
+    }
+    if (!stringIsAbsolutePath(str)) {
+      return parentPath.resolveSibling(str)
+    } else {
+      return resolveFile(str, fileResolver)
+    }
   }
 }

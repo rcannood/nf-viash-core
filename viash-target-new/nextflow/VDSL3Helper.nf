@@ -24,12 +24,21 @@ include {
   toRelativeTaggedYamlBlob;
   writeJson;
   writeYaml;
+  readJson;
+  readYaml;
+  readCsv;
 
   // Config utilities
   processArgument as _processArgument;
   processConfig;
   processAuto;
   assertMapKeys;
+  checkArgumentType as _checkArgumentType;
+  processInputValues as _processInputValues;
+  checkValidOutputArgument as _checkValidOutputArgument;
+  checkAllRequiredOutputsPresent as _checkAllRequiredOuputsPresent;
+  addGlobalArguments;
+  processDirectives;
 
   // Help utilities
   generateArgumentHelp as _generateArgumentHelp;
@@ -39,240 +48,22 @@ include {
   stringIsAbsolutePath as _stringIsAbsolutePath;
   getChild as _getChild;
   getRootDir;
+  resolveSiblingIfNotAbsolute as _resolveSiblingIfNotAbsolute;
 
-  // Directive utilities
-  processDirectivesWithOverride as _processDirectivesWithOverride;
+  // Directive utilities — processDirectives imported above (reads params internally)
 
   // State utilities
   checkUniqueIds as _checkUniqueIds;
   splitParams as _splitParams;
-  paramListGuessFormat as _paramListGuessFormat;
   processFromState as _processFromState;
   processToState as _processToState;
+  createIDChecker;
+  parseParamList as _parseParamList;
+
+  // Nextflow runtime helpers
+  getPublishDir;
 } from 'plugin/viash-core'
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/arguments/_checkArgumentType.nf'
-class UnexpectedArgumentTypeException extends Exception {
-  String errorIdentifier
-  String stage
-  String plainName
-  String expectedClass
-  String foundClass
-  
-  // ${key ? " in module '$key'" : ""}${id ? " id '$id'" : ""}
-  UnexpectedArgumentTypeException(String errorIdentifier, String stage, String plainName, String expectedClass, String foundClass) {
-    super("Error${errorIdentifier ? " $errorIdentifier" : ""}:${stage ? " $stage" : "" } argument '${plainName}' has the wrong type. " +
-      "Expected type: ${expectedClass}. Found type: ${foundClass}")
-    this.errorIdentifier = errorIdentifier
-    this.stage = stage
-    this.plainName = plainName
-    this.expectedClass = expectedClass
-    this.foundClass = foundClass
-  }
-}
-
-/**
-  * Checks if the given value is of the expected type. If not, an exception is thrown.
-  *
-  * @param stage The stage of the argument (input or output)
-  * @param par The parameter definition
-  * @param value The value to check
-  * @param errorIdentifier The identifier to use in the error message
-  * @return The value, if it is of the expected type
-  * @throws UnexpectedArgumentTypeException If the value is not of the expected type
-*/
-def _checkArgumentType(String stage, Map par, Object value, String errorIdentifier) {
-  // expectedClass will only be != null if value is not of the expected type
-  def expectedClass = null
-  def foundClass = null
-  
-  // todo: split if need be
-  
-  if (!par.required && value == null) {
-    expectedClass = null
-  } else if (par.multiple) {
-    if (value !instanceof Collection) {
-      value = [value]
-    }
-    
-    // split strings
-    value = value.collectMany{ val ->
-      if (val instanceof String) {
-        // collect() to ensure that the result is a List and not simply an array
-        val.split(par.multiple_sep).collect()
-      } else {
-        [val]
-      }
-    }
-
-    // process globs
-    if (par.type == "file" && par.direction == "input") {
-      value = value.collect{ it instanceof String ? file(it, hidden: true) : it }.flatten()
-    }
-
-    // check types of elements in list
-    try {
-      value = value.collect { listVal ->
-        _checkArgumentType(stage, par + [multiple: false], listVal, errorIdentifier)
-      }
-    } catch (UnexpectedArgumentTypeException e) {
-      expectedClass = "List[${e.expectedClass}]"
-      foundClass = "List[${e.foundClass}]"
-    }
-  } else if (par.type == "string") {
-    // cast to string if need be. only cast if the value is a GString
-    if (value instanceof GString) {
-      value = value as String
-    }
-    expectedClass = value instanceof String ? null : "String"
-  } else if (par.type == "integer") {
-    // cast to integer if need be
-    if (value !instanceof Integer) {
-      try {
-        value = value as Integer
-      } catch (NumberFormatException e) {
-        expectedClass = "Integer"
-      }
-    }
-  } else if (par.type == "long") {
-    // cast to long if need be
-    if (value !instanceof Long) {
-      try {
-        value = value as Long
-      } catch (NumberFormatException e) {
-        expectedClass = "Long"
-      }
-    }
-  } else if (par.type == "double") {
-    // cast to double if need be
-    if (value !instanceof Double) {
-      try {
-        value = value as Double
-      } catch (NumberFormatException e) {
-        expectedClass = "Double"
-      }
-    }
-  } else if (par.type == "float") {
-    // cast to float if need be
-    if (value !instanceof Float) {
-      try {
-        value = value as Float
-      } catch (NumberFormatException e) {
-        expectedClass = "Float"
-      }
-    }
-  } else if (par.type == "boolean" | par.type == "boolean_true" | par.type == "boolean_false") {
-    // cast to boolean if need be
-    if (value !instanceof Boolean) {
-      try {
-        value = value as Boolean
-      } catch (Exception e) {
-        expectedClass = "Boolean"
-      }
-    }
-  } else if (par.type == "file" && (par.direction == "input" || stage == "output")) {
-    // cast to path if need be
-    if (value instanceof String) {
-      value = file(value, hidden: true)
-    }
-    if (value instanceof File) {
-      value = value.toPath()
-    }
-    expectedClass = value instanceof Path ? null : "Path"
-  } else if (par.type == "file" && stage == "input" && par.direction == "output") {
-    // cast to string if need be
-    if (value !instanceof String) {
-      try {
-        value = value as String
-      } catch (Exception e) {
-        expectedClass = "String"
-      }
-    }
-  } else {
-    // didn't find a match for par.type
-    expectedClass = par.type
-  }
-
-  if (expectedClass != null) {
-    if (foundClass == null) {
-      foundClass = value.getClass().getName()
-    }
-    throw new UnexpectedArgumentTypeException(errorIdentifier, stage, par.plainName, expectedClass, foundClass)
-  }
-  
-  return value
-}
-// helper file: 'src/main/resources/io/viash/runners/nextflow/arguments/_processInputValues.nf'
-Map _processInputValues(Map inputs, Map config, String id, String key) {
-  if (!workflow.stubRun) {
-    config.allArguments.each { arg ->
-      if (arg.required && arg.direction == "input") {
-        assert inputs.containsKey(arg.plainName) && inputs.get(arg.plainName) != null : 
-          "Error in module '${key}' id '${id}': required input argument '${arg.plainName}' is missing"
-      }
-    }
-
-    inputs = inputs.collectEntries { name, value ->
-      def par = config.allArguments.find { it.plainName == name && (it.direction == "input" || it.type == "file") }
-      assert par != null : "Error in module '${key}' id '${id}': '${name}' is not a valid input argument"
-
-      value = _checkArgumentType("input", par, value, "in module '$key' id '$id'")
-
-      [ name, value ]
-    }
-  }
-  return inputs
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/arguments/_processOutputValues.nf'
-Map _checkValidOutputArgument(Map outputs, Map config, String id, String key) {
-  if (!workflow.stubRun) {
-    outputs = outputs.collectEntries { name, value ->
-      def par = config.allArguments.find { it.plainName == name && it.direction == "output" }
-      assert par != null : "Error in module '${key}' id '${id}': '${name}' is not a valid output argument"
-      
-      value = _checkArgumentType("output", par, value, "in module '$key' id '$id'")
-      
-      [ name, value ]
-    }
-  }
-  return outputs
-}
-
-void _checkAllRequiredOuputsPresent(Map outputs, Map config, String id, String key) {
-  if (!workflow.stubRun) {
-    config.allArguments.each { arg ->
-      if (arg.direction == "output" && arg.required) {
-        assert outputs.containsKey(arg.plainName) && outputs.get(arg.plainName) != null : 
-          "Error in module '${key}' id '${id}': required output argument '${arg.plainName}' is missing"
-      }
-    }
-  }
-}
-// helper file: 'src/main/resources/io/viash/runners/nextflow/channel/IDChecker.nf'
-class IDChecker {
-  final def items = [] as Set
-
-  @groovy.transform.WithWriteLock
-  boolean observe(String item) {
-    if (items.contains(item)) {
-      return false
-    } else {
-      items << item
-      return true
-    }
-  }
-
-  @groovy.transform.WithReadLock
-  boolean contains(String item) {
-    return items.contains(item)
-  }
-
-  @groovy.transform.WithReadLock
-  Set getItems() {
-    return items.clone()
-  }
-}
 // helper file: 'src/main/resources/io/viash/runners/nextflow/channel/_channelFromParams.nf'
 /**
  * Parse nextflow parameters based on settings defined in a viash config.
@@ -304,7 +95,7 @@ class IDChecker {
  * @return A list of parameters with the first element of the event being
  *         the event ID and the second element containing a map of the parsed parameters.
  */
- 
+
 List<Tuple2<String, Map<String, Object>>> _paramsToParamSets(Map params, Map config){
   // todo: fetch key from run args
   def key_ = config.name
@@ -377,98 +168,11 @@ def _channelFromParams(Map params, Map config) {
   return Channel.fromList(processedParams)
 }
 
-/**
-  * Read the param list
-  * 
-  * @param param_list One of the following:
-  *   - A String containing the path to the parameter list file (csv, json or yaml),
-  *   - A yaml blob of a list of maps (yaml_blob),
-  *   - Or a groovy list of maps (asis).
-  * @param config A Map of the Viash configuration.
-  * 
-  * @return A List of Maps containing the parameters.
-  */
-def _parseParamList(param_list, Map config) {
-  // first determine format by extension
-  def paramListFormat = _paramListGuessFormat(param_list)
-
-  def paramListPath = (paramListFormat != "asis" && paramListFormat != "yaml_blob") ?
-    file(param_list, hidden: true) :
-    null
-
-  // get the correct parser function for the detected params_list format
-  def paramSets = []
-  if (paramListFormat == "asis") {
-    paramSets = param_list
-  } else if (paramListFormat == "yaml_blob") {
-    paramSets = readYamlBlob(param_list)
-  } else if (paramListFormat == "yaml") {
-    paramSets = readYaml(paramListPath)
-  } else if (paramListFormat == "json") {
-    paramSets = readJson(paramListPath)
-  } else if (paramListFormat == "csv") {
-    paramSets = readCsv(paramListPath)
-  } else {
-    error "Format of provided --param_list not recognised.\n" +
-    "Found: '$paramListFormat'.\n" +
-    "Expected: a csv file, a json file, a yaml file,\n" +
-    "a yaml blob or a groovy list of maps."
-  }
-
-  // data checks
-  assert paramSets instanceof List: "--param_list should contain a list of maps"
-  for (value in paramSets) {
-    assert value instanceof Map: "--param_list should contain a list of maps"
-  }
-
-  // id is argument
-  def idIsArgument = config.allArguments.any{it.plainName == "id"}
-
-  // Reformat from List<Map> to List<Tuple2<String, Map>> by adding the ID as first element of a Tuple2
-  paramSets = paramSets.collect({ data ->
-    def id = data.id
-    if (!idIsArgument) {
-      data = data.findAll{k, v -> k != "id"}
-    }
-    [id, data]
-  })
-
-  // Split parameters with 'multiple: true'
-  paramSets = paramSets.collect({ id, data ->
-    data = _splitParams(data, config)
-    [id, data]
-  })
-  
-  // The paths of input files inside a param_list file may have been specified relatively to the
-  // location of the param_list file. These paths must be made absolute.
-  if (paramListPath) {
-    paramSets = paramSets.collect({ id, data ->
-      def new_data = data.collectEntries{ parName, parValue ->
-        def par = config.allArguments.find{it.plainName == parName}
-        if (par && par.type == "file" && par.direction == "input") {
-          if (parValue instanceof Collection) {
-            parValue = parValue.collectMany{path -> 
-              def x = _resolveSiblingIfNotAbsolute(path, paramListPath)
-              x instanceof Collection ? x : [x]
-            }
-          } else {
-            parValue = _resolveSiblingIfNotAbsolute(parValue, paramListPath) 
-          }
-        }
-        [parName, parValue]
-      }
-      [id, new_data]
-    })
-  }
-
-  return paramSets
-}
-
 // helper file: 'src/main/resources/io/viash/runners/nextflow/channel/checkUniqueIds.nf'
 def checkUniqueIds(Map args) {
   def stopOnError = args.stopOnError == null ? args.stopOnError : true
 
-  def idChecker = new IDChecker()
+  def idChecker = createIDChecker()
 
   return filter { tup ->
     if (!idChecker.observe(tup[0])) {
@@ -619,7 +323,7 @@ def runEach(Map args) {
  */
 
 def safeJoin(targetChannel, sourceChannel, key) {
-  def sourceIDs = new IDChecker()
+  def sourceIDs = createIDChecker()
 
   def sourceCheck = sourceChannel
     | map { tup ->
@@ -653,48 +357,7 @@ def safeJoin(targetChannel, sourceChannel, key) {
     }
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/config/addGlobalParams.nf'
-def addGlobalArguments(config) {
-  def localConfig = [
-    "argument_groups": [
-      [
-        "name": "Nextflow input-output arguments",
-        "description": "Input/output parameters for Nextflow itself. Please note that both publishDir and publish_dir are supported but at least one has to be configured.",
-        "arguments" : [
-          [
-            'name': '--publish_dir',
-            'required': true,
-            'type': 'string',
-            'description': 'Path to an output directory.',
-            'example': 'output/',
-            'multiple': false
-          ],
-          [
-            'name': '--param_list',
-            'required': false,
-            'type': 'string',
-            'description': '''Allows inputting multiple parameter sets to initialise a Nextflow channel. A `param_list` can either be a list of maps, a csv file, a json file, a yaml file, or simply a yaml blob.
-            |
-            |* A list of maps (as-is) where the keys of each map corresponds to the arguments of the pipeline. Example: in a `nextflow.config` file: `param_list: [ ['id': 'foo', 'input': 'foo.txt'], ['id': 'bar', 'input': 'bar.txt'] ]`.
-            |* A csv file should have column names which correspond to the different arguments of this pipeline. Example: `--param_list data.csv` with columns `id,input`.
-            |* A json or a yaml file should be a list of maps, each of which has keys corresponding to the arguments of the pipeline. Example: `--param_list data.json` with contents `[ {'id': 'foo', 'input': 'foo.txt'}, {'id': 'bar', 'input': 'bar.txt'} ]`.
-            |* A yaml blob can also be passed directly as a string. Example: `--param_list "[ {'id': 'foo', 'input': 'foo.txt'}, {'id': 'bar', 'input': 'bar.txt'} ]"`.
-            |
-            |When passing a csv, json or yaml file, relative path names are relativized to the location of the parameter file. No relativation is performed when `param_list` is a list of maps (as-is) or a yaml blob.'''.stripMargin(),
-            'example': 'my_params.yaml',
-            'multiple': false,
-            'hidden': true
-          ]
-          // TODO: allow multiple: true in param_list?
-          // TODO: allow to specify a --param_list_regex to filter the param_list?
-          // TODO: allow to specify a --param_list_from_state to remap entries in the param_list?
-        ]
-      ]
-    ]
-  ]
-
-  return processConfig(_mergeMap(config, localConfig))
-}
+// addGlobalArguments is now imported from plugin
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/config/generateHelp.nf'
 def helpMessage(config) {
@@ -711,26 +374,6 @@ def helpMessage(config) {
 def readConfig(file) {
   def config = readYaml(file ?: moduleDir.resolve("config.vsh.yaml"))
   processConfig(config)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/functions/_resolveSiblingIfNotAbsolute.nf'
-/**
-  * Resolve a path relative to the current file.
-  * 
-  * @param str The path to resolve, as a String.
-  * @param parentPath The path to resolve relative to, as a Path.
-  *
-  * @return The path that may have been resovled, as a Path.
-  */
-def _resolveSiblingIfNotAbsolute(str, parentPath) {
-  if (str !instanceof String) {
-    return str
-  }
-  if (!_stringIsAbsolutePath(str)) {
-    return parentPath.resolveSibling(str)
-  } else {
-    return file(str, hidden: true)
-  }
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/functions/collectTraces.nf'
@@ -765,12 +408,7 @@ def collectTraces() {
   traces
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/functions/getPublishDir.nf'
-def getPublishDir() {
-  return params.containsKey("publish_dir") ? params.publish_dir : 
-    params.containsKey("publishDir") ? params.publishDir : 
-    null
-}
+// getPublishDir is now imported from plugin
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/functions/niceView.nf'
 /**
@@ -788,77 +426,7 @@ def niceView() {
   return niceViewWf
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readCsv.nf'
-
-def readCsv(file_path) {
-  def output = []
-  def inputFile = file_path !instanceof Path ? file(file_path, hidden: true) : file_path
-
-  // todo: allow escaped quotes in string
-  // todo: allow single quotes?
-  def splitRegex = java.util.regex.Pattern.compile(''',(?=(?:[^"]*"[^"]*")*[^"]*$)''')
-  def removeQuote = java.util.regex.Pattern.compile('''"(.*)"''')
-
-  def br = java.nio.file.Files.newBufferedReader(inputFile)
-
-  def row = -1
-  def header = null
-  while (br.ready() && header == null) {
-    def line = br.readLine()
-    row++
-    if (!line.startsWith("#")) {
-      header = splitRegex.split(line, -1).collect{field ->
-        m = removeQuote.matcher(field)
-        m.find() ? m.replaceFirst('$1') : field
-      }
-    }
-  }
-  assert header != null: "CSV file should contain a header"
-
-  while (br.ready()) {
-    def line = br.readLine()
-    row++
-    if (line == null) {
-      br.close()
-      break
-    }
-
-    if (!line.startsWith("#")) {
-      def predata = splitRegex.split(line, -1)
-      def data = predata.collect{field ->
-        if (field == "") {
-          return null
-        }
-        def m = removeQuote.matcher(field)
-        if (m.find()) {
-          return m.replaceFirst('$1')
-        } else {
-          return field
-        }
-      }
-      assert header.size() == data.size(): "Row $row should contain the same number as fields as the header"
-      
-      def dataMap = [header, data].transpose().collectEntries().findAll{it.value != null}
-      output.add(dataMap)
-    }
-  }
-
-  output
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readJson.nf'
-def readJson(file_path) {
-  def inputFile = file_path !instanceof Path ? file(file_path, hidden: true) : file_path
-  def jsonSlurper = new groovy.json.JsonSlurper()
-  jsonSlurper.parse(inputFile)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readYaml.nf'
-def readYaml(file_path) {
-  def inputFile = file_path !instanceof Path ? file(file_path, hidden: true) : file_path
-  def yamlSlurper = new org.yaml.snakeyaml.Yaml()
-  yamlSlurper.load(inputFile)
-}
+// readCsv, readJson, readYaml are now imported from plugin
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/states/findStates.nf'
 def findStates(Map params, Map config) {
@@ -1349,11 +917,7 @@ def setState(fun) {
   }
 }
 
-// processDirectives: thin wrapper delegating to plugin (uses params)
-def processDirectives(Map drctv) {
-  def containerRegistryOverride = params.containsKey("override_container_registry") ? params["override_container_registry"] : null
-  return _processDirectivesWithOverride(drctv, containerRegistryOverride)
-}
+// processDirectives is now imported from plugin (reads params.override_container_registry internally)
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/workflowFactory/processWorkflowArgs.nf'
 def processWorkflowArgs(Map args, Map defaultWfArgs, Map meta) {

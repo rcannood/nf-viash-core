@@ -8,6 +8,7 @@ import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
 import io.viash.viash_core.util.CollectionUtils
+import io.viash.viash_core.util.PathUtils
 
 /**
  * Custom YAML constructor that handles !file tags,
@@ -81,11 +82,8 @@ class CustomRepresenter extends org.yaml.snakeyaml.representer.Representer {
 
 /**
  * Serialization utilities for reading and writing JSON, YAML, and CSV.
- * These are pure Groovy — no Nextflow dependencies.
- *
- * Note: readJson, readYaml, readCsv that accept a string file path and use
- * Nextflow's file() global are NOT included here. Those remain in VDSL3Helper.nf.
- * Only the blob/Path-based variants are included.
+ * Uses nextflow.Nextflow.file() for path resolution when a session
+ * is available, falls back to Paths.get() in unit tests.
  */
 class SerializationUtils {
 
@@ -251,5 +249,44 @@ class SerializationUtils {
     assert data : "writeYaml: data should not be null"
     assert file : "writeYaml: file should not be null"
     file.write(toYamlBlob(data))
+  }
+
+  // ---- Convenience methods that resolve file paths ----
+
+  /**
+   * Resolve a file_path to a Path, handling both String and Path inputs.
+   */
+  private static Path _toPath(Object filePath) {
+    if (filePath instanceof Path) return filePath
+    def resolved = PathUtils.resolveFile(filePath.toString())
+    if (resolved instanceof File) return resolved.toPath()
+    return resolved as Path
+  }
+
+  /**
+   * Read and parse a JSON file. Accepts a String path or a Path.
+   * Uses nextflow.Nextflow.file() for resolution when a session is available.
+   */
+  static Object readJson(Object filePath) {
+    def path = _toPath(filePath)
+    return readJsonFromPath(path)
+  }
+
+  /**
+   * Read and parse a YAML file. Accepts a String path or a Path.
+   * Uses nextflow.Nextflow.file() for resolution when a session is available.
+   */
+  static Object readYaml(Object filePath) {
+    def path = _toPath(filePath)
+    return readYamlFromPath(path)
+  }
+
+  /**
+   * Read and parse a CSV file. Accepts a String path or a Path.
+   * Uses nextflow.Nextflow.file() for resolution when a session is available.
+   */
+  static List<Map<String, String>> readCsv(Object filePath) {
+    def path = _toPath(filePath)
+    return readCsvFromPath(path)
   }
 }

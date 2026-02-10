@@ -27,8 +27,10 @@ import io.viash.viash_core.config.DirectiveUtils
 import io.viash.viash_core.help.HelpUtils
 import io.viash.viash_core.help.TextUtils
 import io.viash.viash_core.io.SerializationUtils
+import io.viash.viash_core.state.IDChecker
 import io.viash.viash_core.state.StateUtils
 import io.viash.viash_core.util.CollectionUtils
+import io.viash.viash_core.util.NextflowHelper
 import io.viash.viash_core.util.PathUtils
 
 /**
@@ -122,6 +124,21 @@ class ViashCoreExtension extends PluginExtensionPoint {
         SerializationUtils.writeYaml(data, file)
     }
 
+    @Function
+    Object readJson(Object filePath) {
+        SerializationUtils.readJson(filePath)
+    }
+
+    @Function
+    Object readYaml(Object filePath) {
+        SerializationUtils.readYaml(filePath)
+    }
+
+    @Function
+    List readCsv(Object filePath) {
+        SerializationUtils.readCsv(filePath)
+    }
+
     // ---- Config utilities (io.viash.viash_core.config) ----
 
     @Function
@@ -180,11 +197,6 @@ class ViashCoreExtension extends PluginExtensionPoint {
         DirectiveUtils.processDirectives(drctv)
     }
 
-    @Function
-    Map processDirectivesWithOverride(Map drctv, String containerRegistryOverride) {
-        DirectiveUtils.processDirectives(drctv, containerRegistryOverride)
-    }
-
     // ---- State utilities (io.viash.viash_core.state) ----
 
     @Function
@@ -210,5 +222,59 @@ class ViashCoreExtension extends PluginExtensionPoint {
     @Function
     Object processToState(Object toState, String key_, Map config_) {
         StateUtils.processToState(toState, key_, config_)
+    }
+
+    // ---- Argument type checking (io.viash.viash_core.config) ----
+
+    @Function
+    Object checkArgumentType(String stage, Map par, Object value, String errorIdentifier) {
+        ConfigUtils.checkArgumentType(stage, par, value, errorIdentifier)
+    }
+
+    @Function
+    Map processInputValues(Map inputs, Map config, String id, String key) {
+        ConfigUtils.processInputValues(inputs, config, id, key)
+    }
+
+    @Function
+    Map checkValidOutputArgument(Map outputs, Map config, String id, String key) {
+        ConfigUtils.checkValidOutputArgument(outputs, config, id, key)
+    }
+
+    @Function
+    void checkAllRequiredOutputsPresent(Map outputs, Map config, String id, String key) {
+        ConfigUtils.checkAllRequiredOutputsPresent(outputs, config, id, key)
+    }
+
+    @Function
+    Map addGlobalArguments(Map config) {
+        ConfigUtils.addGlobalArguments(config)
+    }
+
+    // ---- Extended path utilities (io.viash.viash_core.util) ----
+
+    @Function
+    Object resolveSiblingIfNotAbsolute(Object str, Object parentPath) {
+        PathUtils.resolveSiblingIfNotAbsolute(str, parentPath)
+    }
+
+    // ---- Extended state utilities (io.viash.viash_core.state) ----
+
+    @Function
+    IDChecker createIDChecker() {
+        StateUtils.createIDChecker()
+    }
+
+    @Function
+    List parseParamList(Object paramList, Map config) {
+        StateUtils.parseParamList(paramList, config)
+    }
+
+    // ---- Nextflow runtime helpers ----
+
+    @Function
+    String getPublishDir() {
+        NextflowHelper.getParam("publish_dir",
+            NextflowHelper.getParam("publishDir")) as String
     }
 }

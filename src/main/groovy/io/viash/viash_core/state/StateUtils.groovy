@@ -1,11 +1,112 @@
 package io.viash.viash_core.state
 
+import io.viash.viash_core.io.SerializationUtils
+import io.viash.viash_core.util.PathUtils
+
 /**
  * Functions for processing fromState and toState arguments
  * used in workflow factories.
  * Pure Groovy — no Nextflow dependencies.
  */
 class StateUtils {
+
+  /**
+   * Create a new IDChecker instance.
+   * Use this factory method to avoid directly instantiating the class
+   * (which would require class imports not available from plugin includes).
+   */
+  static IDChecker createIDChecker() {
+    return new IDChecker()
+  }
+
+  /**
+   * Parse a param_list into a list of [id, params] tuples.
+   *
+   * @param paramList The raw param_list value (String path, yaml blob, or List of Maps)
+   * @param config The processed component config
+   * @param fileResolver Optional closure to resolve file paths from strings.
+   *        If null, uses nextflow.Nextflow.file() when a session is available,
+   *        or Paths.get() as a fallback (e.g. in unit tests).
+   * @return A List of [id, Map] tuples
+   */
+  static List parseParamList(Object paramList, Map config, Closure fileResolver = null) {
+    def paramListFormat = paramListGuessFormat(paramList)
+
+    // Resolve the file path if it's a file-based format
+    java.nio.file.Path resolvedPath = null
+    if (paramListFormat != "asis" && paramListFormat != "yaml_blob") {
+      def resolved = PathUtils.resolveFile(paramList, fileResolver)
+      if (resolved instanceof File) resolved = resolved.toPath()
+      resolvedPath = resolved as java.nio.file.Path
+    }
+
+    def paramSets = []
+    if (paramListFormat == "asis") {
+      paramSets = paramList
+    } else if (paramListFormat == "yaml_blob") {
+      paramSets = SerializationUtils.readYamlBlob(paramList)
+    } else if (paramListFormat == "yaml") {
+      paramSets = SerializationUtils.readYamlFromPath(resolvedPath)
+    } else if (paramListFormat == "json") {
+      paramSets = SerializationUtils.readJsonFromPath(resolvedPath)
+    } else if (paramListFormat == "csv") {
+      paramSets = SerializationUtils.readCsvFromPath(resolvedPath)
+    } else {
+      throw new IllegalArgumentException(
+        "Format of provided --param_list not recognised.\n" +
+        "Found: '${paramListFormat}'.\n" +
+        "Expected: a csv file, a json file, a yaml file,\n" +
+        "a yaml blob or a groovy list of maps."
+      )
+    }
+
+    // data checks
+    assert paramSets instanceof List : "--param_list should contain a list of maps"
+    for (value in paramSets) {
+      assert value instanceof Map : "--param_list should contain a list of maps"
+    }
+
+    // id is argument
+    def idIsArgument = config.allArguments.any { it.plainName == "id" }
+
+    // Reformat from List<Map> to List<Tuple2<String, Map>> by adding the ID
+    paramSets = paramSets.collect { data ->
+      def id = data.id
+      if (!idIsArgument) {
+        data = data.findAll { k, v -> k != "id" }
+      }
+      [id, data]
+    }
+
+    // Split parameters with 'multiple: true'
+    paramSets = paramSets.collect { id, data ->
+      data = splitParams(data, config)
+      [id, data]
+    }
+
+    // Resolve relative paths for input files
+    if (resolvedPath != null) {
+      paramSets = paramSets.collect { id, data ->
+        def newData = data.collectEntries { parName, parValue ->
+          def par = config.allArguments.find { it.plainName == parName }
+          if (par && par.type == "file" && par.direction == "input") {
+            if (parValue instanceof Collection) {
+              parValue = parValue.collectMany { path ->
+                def x = PathUtils.resolveSiblingIfNotAbsolute(path, resolvedPath, fileResolver)
+                x instanceof Collection ? x : [x]
+              }
+            } else {
+              parValue = PathUtils.resolveSiblingIfNotAbsolute(parValue, resolvedPath, fileResolver)
+            }
+          }
+          [parName, parValue]
+        }
+        [id, newData]
+      }
+    }
+
+    return paramSets
+  }
 
   /**
    * Standardize the fromState parameter.
