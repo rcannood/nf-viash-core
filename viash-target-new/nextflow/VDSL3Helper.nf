@@ -2,6 +2,55 @@
 // VDSL3 helper functions //
 ////////////////////////////
 
+// Import functions from viash-core plugin
+include {
+  // Collection utilities
+  iterateMap;
+  deepClone;
+  mergeMap as _mergeMap;
+  collectFiles;
+  collectInputOutputPaths;
+
+  // Text utilities
+  paragraphWrap as _paragraphWrap;
+
+  // Serialization utilities
+  readJsonBlob;
+  readYamlBlob;
+  readTaggedYaml;
+  toJsonBlob;
+  toYamlBlob;
+  toTaggedYamlBlob;
+  toRelativeTaggedYamlBlob;
+  writeJson;
+  writeYaml;
+
+  // Config utilities
+  processArgument as _processArgument;
+  processConfig;
+  processAuto;
+  assertMapKeys;
+
+  // Help utilities
+  generateArgumentHelp as _generateArgumentHelp;
+  generateHelp as _generateHelp;
+
+  // Path utilities
+  stringIsAbsolutePath as _stringIsAbsolutePath;
+  getChild as _getChild;
+  getRootDir;
+
+  // Directive utilities
+  processDirectivesWithOverride as _processDirectivesWithOverride;
+
+  // State utilities
+  checkUniqueIds as _checkUniqueIds;
+  splitParams as _splitParams;
+  paramListGuessFormat as _paramListGuessFormat;
+  processFromState as _processFromState;
+  processToState as _processToState;
+} from 'plugin/viash-core'
+
 // helper file: 'src/main/resources/io/viash/runners/nextflow/arguments/_checkArgumentType.nf'
 class UnexpectedArgumentTypeException extends Exception {
   String errorIdentifier
@@ -328,53 +377,6 @@ def _channelFromParams(Map params, Map config) {
   return Channel.fromList(processedParams)
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/channel/_checkUniqueIds.nf'
-
-/**
- * Check if the ids are unique across parameter sets
- *
- * @param parameterSets a list of parameter sets.
- */
-def _checkUniqueIds(List<Tuple2<String, Map<String, Object>>> parameterSets) {
-  def ppIds = parameterSets.collect{it[0]}
-  assert ppIds.size() == ppIds.unique().size() : "All argument sets should have unique ids. Detected ids: $ppIds"
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/channel/_getChild.nf'
-
-// helper functions for reading params from file //
-def _getChild(parent, child) {
-  if (child.contains("://") || java.nio.file.Paths.get(child).isAbsolute()) {
-    child
-  } else {
-    def parentAbsolute = java.nio.file.Paths.get(parent).toAbsolutePath().toString()
-    parentAbsolute.replaceAll('/[^/]*$', "/") + child
-  }
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/channel/_parseParamList.nf'
-/**
-  * Figure out the param list format based on the file extension
-  *
-  * @param param_list A String containing the path to the parameter list file.
-  *
-  * @return A String containing the format of the parameter list file.
-  */
-def _paramListGuessFormat(param_list) {
-  if (param_list !instanceof String) {
-    "asis"
-  } else if (param_list.endsWith(".csv")) {
-    "csv"
-  } else if (param_list.endsWith(".json") || param_list.endsWith(".jsn")) {
-    "json"
-  } else if (param_list.endsWith(".yaml") || param_list.endsWith(".yml")) {
-    "yaml"
-  } else {
-    "yaml_blob"
-  }
-}
-
-
 /**
   * Read the param list
   * 
@@ -460,50 +462,6 @@ def _parseParamList(param_list, Map config) {
   }
 
   return paramSets
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/channel/_splitParams.nf'
-/**
- * Split parameters for arguments that accept multiple values using their separator
- *
- * @param paramList A Map containing parameters to split.
- * @param config A Map of the Viash configuration. This Map can be generated from the config file
- *               using the readConfig() function.
- *
- * @return A Map of parameters where the parameter values have been split into a list using
- *         their seperator.
- */
-Map<String, Object> _splitParams(Map<String, Object> parValues, Map config){
-  def parsedParamValues = parValues.collectEntries { parName, parValue ->
-    def parameterSettings = config.allArguments.find({it.plainName == parName})
-
-    if (!parameterSettings) {
-      // if argument is not found, do not alter 
-      return [parName, parValue]
-    }
-    if (parameterSettings.multiple) { // Check if parameter can accept multiple values
-      if (parValue instanceof Collection) {
-        parValue = parValue.collect{it instanceof String ? it.split(parameterSettings.multiple_sep) : it }
-      } else if (parValue instanceof String) {
-        parValue = parValue.split(parameterSettings.multiple_sep)
-      } else if (parValue == null) {
-        parValue = []
-      } else {
-        parValue = [ parValue ]
-      }
-      parValue = parValue.flatten()
-    }
-    // For all parameters check if multiple values are only passed for
-    // arguments that allow it. Quietly simplify lists of length 1.
-    if (!parameterSettings.multiple && parValue instanceof Collection) {
-      assert parValue.size() == 1 : 
-      "Error: argument ${parName} has too many values.\n" +
-      "  Expected amount: 1. Found: ${parValue.size()}"
-      parValue = parValue[0]
-    }
-    [parName, parValue]
-  }
-  return parsedParamValues
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/channel/checkUniqueIds.nf'
@@ -695,58 +653,6 @@ def safeJoin(targetChannel, sourceChannel, key) {
     }
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/config/_processArgument.nf'
-def _processArgument(arg) {
-  arg.multiple = arg.multiple != null ? arg.multiple : false
-  arg.required = arg.required != null ? arg.required : false
-  arg.direction = arg.direction != null ? arg.direction : "input"
-  arg.multiple_sep = arg.multiple_sep != null ? arg.multiple_sep : ";"
-  arg.plainName = arg.name.replaceAll("^-*", "")
-
-  if (arg.type == "file") {
-    arg.must_exist = arg.must_exist != null ? arg.must_exist : true
-    arg.create_parent = arg.create_parent != null ? arg.create_parent : true
-  }
-
-  // add default values to output files which haven't already got a default
-  if (arg.type == "file" && arg.direction == "output" && arg.default == null) {
-    def mult = arg.multiple ? "_*" : ""
-    def extSearch = ""
-    if (arg.default != null) {
-      extSearch = arg.default
-    } else if (arg.example != null) {
-      extSearch = arg.example
-    }
-    if (extSearch instanceof List) {
-      extSearch = extSearch[0]
-    }
-    def extSearchResult = extSearch.find("\\.[^\\.]+\$")
-    def ext = extSearchResult != null ? extSearchResult : ""
-    arg.default = "\$id.\$key.${arg.plainName}${mult}${ext}"
-    if (arg.multiple) {
-      arg.default = [arg.default]
-    }
-  }
-
-  if (!arg.multiple) {
-    if (arg.default != null && arg.default instanceof List) {
-      arg.default = arg.default[0]
-    }
-    if (arg.example != null && arg.example instanceof List) {
-      arg.example = arg.example[0]
-    }
-  }
-
-  if (arg.type == "boolean_true") {
-    arg.default = false
-  }
-  if (arg.type == "boolean_false") {
-    arg.default = true
-  }
-
-  arg
-}
-
 // helper file: 'src/main/resources/io/viash/runners/nextflow/config/addGlobalParams.nf'
 def addGlobalArguments(config) {
   def localConfig = [
@@ -790,147 +696,7 @@ def addGlobalArguments(config) {
   return processConfig(_mergeMap(config, localConfig))
 }
 
-def _mergeMap(Map lhs, Map rhs) {
-  return rhs.inject(lhs.clone()) { map, entry ->
-    if (map[entry.key] instanceof Map && entry.value instanceof Map) {
-      map[entry.key] = _mergeMap(map[entry.key], entry.value)
-    } else if (map[entry.key] instanceof Collection && entry.value instanceof Collection) {
-      map[entry.key] += entry.value
-    } else {
-      map[entry.key] = entry.value
-    }
-    return map
-  }
-}
-
 // helper file: 'src/main/resources/io/viash/runners/nextflow/config/generateHelp.nf'
-def _generateArgumentHelp(param) {
-  // alternatives are not supported
-  // def names = param.alternatives ::: List(param.name)
-
-  def unnamedProps = [
-    ["required parameter", param.required],
-    ["multiple values allowed", param.multiple],
-    ["output", param.direction.toLowerCase() == "output"],
-    ["file must exist", param.type == "file" && param.must_exist]
-  ].findAll{it[1]}.collect{it[0]}
-  
-  def dflt = null
-  if (param.default != null) {
-    if (param.default instanceof List) {
-      dflt = param.default.join(param.multiple_sep != null ? param.multiple_sep : ", ")
-    } else {
-      dflt = param.default.toString()
-    }
-  }
-  def example = null
-  if (param.example != null) {
-    if (param.example instanceof List) {
-      example = param.example.join(param.multiple_sep != null ? param.multiple_sep : ", ")
-    } else {
-      example = param.example.toString()
-    }
-  }
-  def min = param.min?.toString()
-  def max = param.max?.toString()
-
-  def escapeChoice = { choice ->
-    def s1 = choice.replaceAll("\\n", "\\\\n")
-    def s2 = s1.replaceAll("\"", """\\\"""")
-    s2.contains(",") || s2 != choice ? "\"" + s2 + "\"" : s2
-  }
-  def choices = param.choices == null ? 
-    null : 
-    "[ " + param.choices.collect{escapeChoice(it.toString())}.join(", ") + " ]"
-
-  def namedPropsStr = [
-    ["type", ([param.type] + unnamedProps).join(", ")],
-    ["default", dflt],
-    ["example", example],
-    ["choices", choices],
-    ["min", min],
-    ["max", max]
-  ]
-    .findAll{it[1]}
-    .collect{"\n        " + it[0] + ": " + it[1].replaceAll("\n", "\\n")}
-    .join("")
-  
-  def descStr = param.description == null ?
-    "" :
-    _paragraphWrap("\n" + param.description.trim(), 80 - 8).join("\n        ")
-  
-  "\n    --" + param.plainName +
-    namedPropsStr +
-    descStr
-}
-
-// Based on Helper.generateHelp() in Helper.scala
-def _generateHelp(config) {
-  def fun = config
-
-  // PART 1: NAME AND VERSION
-  def nameStr = fun.name + 
-    (fun.version == null ? "" : " " + fun.version)
-
-  // PART 2: DESCRIPTION
-  def descrStr = fun.description == null ? 
-    "" :
-    "\n\n" + _paragraphWrap(fun.description.trim(), 80).join("\n")
-
-  // PART 3: Usage
-  def usageStr = fun.usage == null ? 
-    "" :
-    "\n\nUsage:\n" + fun.usage.trim()
-
-  // PART 4: Options
-  def argGroupStrs = fun.allArgumentGroups.collect{argGroup ->
-    def name = argGroup.name
-    def descriptionStr = argGroup.description == null ?
-      "" :
-      "\n    " + _paragraphWrap(argGroup.description.trim(), 80-4).join("\n    ") + "\n"
-    def arguments = argGroup.arguments.collect{arg -> 
-      arg instanceof String ? fun.allArguments.find{it.plainName == arg} : arg
-    }.findAll{it != null}
-    def argumentStrs = arguments.collect{param -> _generateArgumentHelp(param)}
-    
-    "\n\n$name:" +
-      descriptionStr +
-      argumentStrs.join("\n")
-  }
-
-  // FINAL: combine
-  def out = nameStr + 
-    descrStr +
-    usageStr + 
-    argGroupStrs.join("")
-
-  return out
-}
-
-// based on Format._paragraphWrap
-def _paragraphWrap(str, maxLength) {
-  def outLines = []
-  str.split("\n").each{par ->
-    def words = par.split("\\s").toList()
-
-    def word = null
-    def line = words.pop()
-    while(!words.isEmpty()) {
-      word = words.pop()
-      if (line.length() + word.length() + 1 <= maxLength) {
-        line = line + " " + word
-      } else {
-        outLines.add(line)
-        line = word
-      }
-    }
-    if (words.isEmpty()) {
-      outLines.add(line)
-    }
-  }
-  return outLines
-}
-
 def helpMessage(config) {
   if (params.containsKey("help") && params.help) {
     def mergedConfig = addGlobalArguments(config)
@@ -938,46 +704,6 @@ def helpMessage(config) {
     println(helpStr)
     exit 0
   }
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/config/processConfig.nf'
-def processConfig(config) {
-  // set defaults for arguments
-  config.arguments = 
-    (config.arguments ?: []).collect{_processArgument(it)}
-
-  // set defaults for argument_group arguments
-  config.argument_groups =
-    (config.argument_groups ?: []).collect{grp ->
-      grp.arguments = (grp.arguments ?: []).collect{_processArgument(it)}
-      grp
-    }
-
-  // create combined arguments list
-  config.allArguments = 
-    config.arguments +
-    config.argument_groups.collectMany{it.arguments}
-
-  // add missing argument groups (based on Functionality::allArgumentGroups())
-  def argGroups = config.argument_groups
-  if (argGroups.any{it.name.toLowerCase() == "arguments"}) {
-    argGroups = argGroups.collect{ grp ->
-      if (grp.name.toLowerCase() == "arguments") {
-        grp = grp + [
-          arguments: grp.arguments + config.arguments
-        ]
-      }
-      grp
-    }
-  } else {
-    argGroups = argGroups + [
-      name: "Arguments",
-      arguments: config.arguments
-    ]
-  }
-  config.allArgumentGroups = argGroups
-
-  config
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/config/readConfig.nf'
@@ -1005,24 +731,6 @@ def _resolveSiblingIfNotAbsolute(str, parentPath) {
   } else {
     return file(str, hidden: true)
   }
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/functions/_stringIsAbsolutePath.nf'
-/**
-  * Check whether a path as a string is absolute.
-  *
-  * In the past, we tried using `file(., relative: true).isAbsolute()`,
-  * but the 'relative' option was added in 22.10.0.
-  *
-  * @param path The path to check, as a String.
-  *
-  * @return Whether the path is absolute, as a boolean.
-  */
-def _stringIsAbsolutePath(path) {
-  def _resolve_URL_PROTOCOL = ~/^([a-zA-Z][a-zA-Z0-9]*:)?\\/.+/
-
-  assert path instanceof String
-  return _resolve_URL_PROTOCOL.matcher(path).matches()
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/functions/collectTraces.nf'
@@ -1057,65 +765,11 @@ def collectTraces() {
   traces
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/functions/deepClone.nf'
-/**
-  * Performs a deep clone of the given object.
-  * @param x an object
-  */
-def deepClone(x) {
-  iterateMap(x, {it instanceof Cloneable ? it.clone() : it})
-}
 // helper file: 'src/main/resources/io/viash/runners/nextflow/functions/getPublishDir.nf'
 def getPublishDir() {
   return params.containsKey("publish_dir") ? params.publish_dir : 
     params.containsKey("publishDir") ? params.publishDir : 
     null
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/functions/getRootDir.nf'
-
-// Recurse upwards until we find a '.build.yaml' file
-def _findBuildYamlFile(pathPossiblySymlink) {
-  def path = pathPossiblySymlink.toRealPath()
-  def child = path.resolve(".build.yaml")
-  if (java.nio.file.Files.isDirectory(path) && java.nio.file.Files.exists(child)) {
-    return child
-  } else {
-    def parent = path.getParent()
-    if (parent == null) {
-      return null
-    } else {
-      return _findBuildYamlFile(parent)
-    }
-  }
-}
-
-// get the root of the target folder
-def getRootDir(resourcesDir) {
-  def dir = _findBuildYamlFile(resourcesDir)
-  assert dir != null: "Could not find .build.yaml in the folder structure"
-  dir.getParent()
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/functions/iterateMap.nf'
-/**
-  * Recursively apply a function over the leaves of an object.
-  * @param obj The object to iterate over.
-  * @param fun The function to apply to each value.
-  * @return The object with the function applied to each value.
-  */
-def iterateMap(obj, fun) {
-  if (obj instanceof List && obj !instanceof String) {
-    return obj.collect{item ->
-      iterateMap(item, fun)
-    }
-  } else if (obj instanceof Map) {
-    return obj.collectEntries{key, item ->
-      [key.toString(), iterateMap(item, fun)]
-    }
-  } else {
-    return fun(obj)
-  }
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/functions/niceView.nf'
@@ -1199,130 +853,11 @@ def readJson(file_path) {
   jsonSlurper.parse(inputFile)
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readJsonBlob.nf'
-def readJsonBlob(str) {
-  def jsonSlurper = new groovy.json.JsonSlurper()
-  jsonSlurper.parseText(str)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readTaggedYaml.nf'
-// Custom constructor to modify how certain objects are parsed from YAML
-class CustomConstructor extends org.yaml.snakeyaml.constructor.Constructor {
-  Path root
-
-  class ConstructPath extends org.yaml.snakeyaml.constructor.AbstractConstruct {
-    public Object construct(org.yaml.snakeyaml.nodes.Node node) {
-      String filename = (String) constructScalar(node);
-      if (root != null) {
-        return root.resolve(filename);
-      }
-      return java.nio.file.Paths.get(filename);
-    }
-  }
-
-  CustomConstructor(org.yaml.snakeyaml.LoaderOptions options, Path root) {
-    super(options)
-    this.root = root
-    // Handling !file tag and parse it back to a File type
-    this.yamlConstructors.put(new org.yaml.snakeyaml.nodes.Tag("!file"), new ConstructPath())
-  }
-}
-
-def readTaggedYaml(Path path) {
-  def options = new org.yaml.snakeyaml.LoaderOptions()
-  def constructor = new CustomConstructor(options, path.getParent())
-  def yaml = new org.yaml.snakeyaml.Yaml(constructor)
-  return yaml.load(path.text)
-}
-
 // helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readYaml.nf'
 def readYaml(file_path) {
   def inputFile = file_path !instanceof Path ? file(file_path, hidden: true) : file_path
   def yamlSlurper = new org.yaml.snakeyaml.Yaml()
   yamlSlurper.load(inputFile)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/readYamlBlob.nf'
-def readYamlBlob(str) {
-  def yamlSlurper = new org.yaml.snakeyaml.Yaml()
-  yamlSlurper.load(str)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/toJsonBlob.nf'
-String toJsonBlob(data) {
-  return groovy.json.JsonOutput.toJson(data)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/toTaggedYamlBlob.nf'
-// Custom representer to modify how certain objects are represented in YAML
-class CustomRepresenter extends org.yaml.snakeyaml.representer.Representer {
-  Path relativizer
-
-  class RepresentPath implements org.yaml.snakeyaml.representer.Represent {
-    public String getFileName(Object obj) {
-      if (obj instanceof File) {
-        obj = ((File) obj).toPath();
-      }
-      if (obj !instanceof Path) {
-        throw new IllegalArgumentException("Object: " + obj + " is not a Path or File");
-      }
-      def path = (Path) obj;
-
-      if (relativizer != null) {
-        return relativizer.relativize(path).toString()
-      } else {
-        return path.toString()
-      }
-    }
-
-    public org.yaml.snakeyaml.nodes.Node representData(Object data) {
-      String filename = getFileName(data);
-      def tag = new org.yaml.snakeyaml.nodes.Tag("!file");
-      return representScalar(tag, filename);
-    }
-  }
-  CustomRepresenter(org.yaml.snakeyaml.DumperOptions options, Path relativizer) {
-    super(options)
-    this.relativizer = relativizer
-    this.representers.put(sun.nio.fs.UnixPath, new RepresentPath())
-    this.representers.put(Path, new RepresentPath())
-    this.representers.put(File, new RepresentPath())
-  }
-}
-
-String toTaggedYamlBlob(data) {
-  return toRelativeTaggedYamlBlob(data, null)
-}
-String toRelativeTaggedYamlBlob(data, Path relativizer) {
-  def options = new org.yaml.snakeyaml.DumperOptions()
-  options.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK)
-  def representer = new CustomRepresenter(options, relativizer)
-  def yaml = new org.yaml.snakeyaml.Yaml(representer, options)
-  return yaml.dump(data)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/toYamlBlob.nf'
-String toYamlBlob(data) {
-  def options = new org.yaml.snakeyaml.DumperOptions()
-  options.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK)
-  options.setPrettyFlow(true)
-  def yaml = new org.yaml.snakeyaml.Yaml(options)
-  def cleanData = iterateMap(data, { it instanceof Path ? it.toString() : it })
-  return yaml.dump(cleanData)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/writeJson.nf'
-void writeJson(data, file) {
-  assert data: "writeJson: data should not be null"
-  assert file: "writeJson: file should not be null"
-  file.write(toJsonBlob(data))
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/readwrite/writeYaml.nf'
-void writeYaml(data, file) {
-  assert data: "writeYaml: data should not be null"
-  assert file: "writeYaml: file should not be null"
-  file.write(toYamlBlob(data))
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/states/findStates.nf'
@@ -1614,48 +1149,6 @@ def publishFilesByConfig(Map args) {
 
 
 
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/states/publishStates.nf'
-def collectFiles(obj) {
-  if (obj instanceof java.io.File || obj instanceof Path)  {
-    return [obj]
-  } else if (obj instanceof List && obj !instanceof String) {
-    return obj.collectMany{item ->
-      collectFiles(item)
-    }
-  } else if (obj instanceof Map) {
-    return obj.collectMany{key, item ->
-      collectFiles(item)
-    }
-  } else {
-    return []
-  }
-}
-
-/**
- * Recurse through a state and collect all input files and their target output filenames.
- * @param obj The state to recurse through.
- * @param prefix The prefix to prepend to the output filenames.
- */
-def collectInputOutputPaths(obj, prefix) {
-  if (obj instanceof File || obj instanceof Path)  {
-    def path = obj instanceof Path ? obj : obj.toPath()
-    def ext = path.getFileName().toString().find("\\.[^\\.]+\$") ?: ""
-    def newFilename = prefix + ext
-    return [[obj, newFilename]]
-  } else if (obj instanceof List && obj !instanceof String) {
-    return obj.withIndex().collectMany{item, ix ->
-      collectInputOutputPaths(item, prefix + "_" + ix)
-    }
-  } else if (obj instanceof Map) {
-    return obj.collectMany{key, item ->
-      collectInputOutputPaths(item, prefix + "." + key)
-    }
-  } else {
-    return []
-  }
-}
-
 def publishStates(Map args) {
   def key_ = args.get("key")
   def yamlTemplate_ = args.get("output_state", args.get("outputState", '$id.$key.state.yaml'))
@@ -1856,429 +1349,10 @@ def setState(fun) {
   }
 }
 
-// helper file: 'src/main/resources/io/viash/runners/nextflow/workflowFactory/processAuto.nf'
-// TODO: unit test processAuto
-def processAuto(Map auto) {
-  // remove null values
-  auto = auto.findAll{k, v -> v != null}
-
-  // check for unexpected keys
-  def expectedKeys = ["simplifyInput", "simplifyOutput", "transcript", "publish"]
-  def unexpectedKeys = auto.keySet() - expectedKeys
-  assert unexpectedKeys.isEmpty(), "unexpected keys in auto: '${unexpectedKeys.join("', '")}'"
-
-  // check auto.simplifyInput
-  assert auto.simplifyInput instanceof Boolean, "auto.simplifyInput must be a boolean"
-
-  // check auto.simplifyOutput
-  assert auto.simplifyOutput instanceof Boolean, "auto.simplifyOutput must be a boolean"
-
-  // check auto.transcript
-  assert auto.transcript instanceof Boolean, "auto.transcript must be a boolean"
-
-  // check auto.publish
-  assert auto.publish instanceof Boolean || auto.publish == "state", "auto.publish must be a boolean or 'state'"
-
-  return auto.subMap(expectedKeys)
-}
-
-// helper file: 'src/main/resources/io/viash/runners/nextflow/workflowFactory/processDirectives.nf'
-def assertMapKeys(map, expectedKeys, requiredKeys, mapName) {
-  assert map instanceof Map : "Expected argument '$mapName' to be a Map. Found: class ${map.getClass()}"
-  map.forEach { key, val -> 
-    assert key in expectedKeys : "Unexpected key '$key' in ${mapName ? mapName + " " : ""}map"
-  }
-  requiredKeys.forEach { requiredKey -> 
-    assert map.containsKey(requiredKey) : "Missing required key '$key' in ${mapName ? mapName + " " : ""}map"
-  }
-}
-
-// TODO: unit test processDirectives
+// processDirectives: thin wrapper delegating to plugin (uses params)
 def processDirectives(Map drctv) {
-  // remove null values
-  drctv = drctv.findAll{k, v -> v != null}
-
-  // check for unexpected keys
-  def expectedKeys = [
-    "accelerator", "afterScript", "beforeScript", "cache", "conda", "container", "containerOptions", "cpus", "disk", "echo", "errorStrategy", "executor", "machineType", "maxErrors", "maxForks", "maxRetries", "memory", "module", "penv", "pod", "publishDir", "queue", "label", "scratch", "storeDir", "stageInMode", "stageOutMode", "tag", "time"
-  ]
-  def unexpectedKeys = drctv.keySet() - expectedKeys
-  assert unexpectedKeys.isEmpty() : "Unexpected keys in process directive: '${unexpectedKeys.join("', '")}'"
-
-  /* DIRECTIVE accelerator
-    accepted examples:
-    - [ limit: 4, type: "nvidia-tesla-k80" ]
-  */
-  if (drctv.containsKey("accelerator")) {
-    assertMapKeys(drctv["accelerator"], ["type", "limit", "request", "runtime"], [], "accelerator")
-  }
-
-  /* DIRECTIVE afterScript
-    accepted examples:
-    - "source /cluster/bin/cleanup"
-  */
-  if (drctv.containsKey("afterScript")) {
-    assert drctv["afterScript"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE beforeScript
-    accepted examples:
-    - "source /cluster/bin/setup"
-  */
-  if (drctv.containsKey("beforeScript")) {
-    assert drctv["beforeScript"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE cache
-    accepted examples:
-    - true
-    - false
-    - "deep"
-    - "lenient"
-  */
-  if (drctv.containsKey("cache")) {
-    assert drctv["cache"] instanceof CharSequence || drctv["cache"] instanceof Boolean
-    if (drctv["cache"] instanceof CharSequence) {
-      assert drctv["cache"] in ["deep", "lenient"] : "Unexpected value for cache"
-    }
-  }
-
-  /* DIRECTIVE conda
-    accepted examples:
-    - "bwa=0.7.15"
-    - "bwa=0.7.15 fastqc=0.11.5"
-    - ["bwa=0.7.15", "fastqc=0.11.5"]
-  */
-  if (drctv.containsKey("conda")) {
-    if (drctv["conda"] instanceof List) {
-      drctv["conda"] = drctv["conda"].join(" ")
-    }
-    assert drctv["conda"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE container
-    accepted examples:
-    - "foo/bar:tag"
-    - [ registry: "reg", image: "im", tag: "ta" ]
-      is transformed to "reg/im:ta"
-    - [ image: "im" ] 
-      is transformed to "im:latest"
-  */
-  if (drctv.containsKey("container")) {
-    assert drctv["container"] instanceof Map || drctv["container"] instanceof CharSequence
-    if (drctv["container"] instanceof Map) {
-      def m = drctv["container"]
-      assertMapKeys(m, [ "registry", "image", "tag" ], ["image"], "container")
-      def part1 = 
-        System.getenv('OVERRIDE_CONTAINER_REGISTRY') ? System.getenv('OVERRIDE_CONTAINER_REGISTRY') + "/" : 
-        params.containsKey("override_container_registry") ? params["override_container_registry"] + "/" : // todo: remove?
-        m.registry ? m.registry + "/" : 
-        ""
-      def part2 = m.image
-      def part3 = m.tag ? ":" + m.tag : ":latest"
-      drctv["container"] = part1 + part2 + part3
-    }
-  }
-
-  /* DIRECTIVE containerOptions
-    accepted examples:
-    - "--foo bar"
-    - ["--foo bar", "-f b"]
-  */
-  if (drctv.containsKey("containerOptions")) {
-    if (drctv["containerOptions"] instanceof List) {
-      drctv["containerOptions"] = drctv["containerOptions"].join(" ")
-    }
-    assert drctv["containerOptions"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE cpus
-    accepted examples:
-    - 1
-    - 10
-  */
-  if (drctv.containsKey("cpus")) {
-    assert drctv["cpus"] instanceof Integer
-  }
-
-  /* DIRECTIVE disk
-    accepted examples:
-    - "1 GB"
-    - "2TB"
-    - "3.2KB"
-    - "10.B"
-  */
-  if (drctv.containsKey("disk")) {
-    assert drctv["disk"] instanceof CharSequence
-    // assert drctv["disk"].matches("[0-9]+(\\.[0-9]*)? *[KMGTPEZY]?B")
-    // ^ does not allow closures
-  }
-
-  /* DIRECTIVE echo
-    accepted examples:
-    - true
-    - false
-  */
-  if (drctv.containsKey("echo")) {
-    assert drctv["echo"] instanceof Boolean
-  }
-
-  /* DIRECTIVE errorStrategy
-    accepted examples:
-    - "terminate"
-    - "finish"
-  */
-  if (drctv.containsKey("errorStrategy")) {
-    assert drctv["errorStrategy"] instanceof CharSequence
-    assert drctv["errorStrategy"] in ["terminate", "finish", "ignore", "retry"] : "Unexpected value for errorStrategy"
-  }
-
-  /* DIRECTIVE executor
-    accepted examples:
-    - "local"
-    - "sge"
-  */
-  if (drctv.containsKey("executor")) {
-    assert drctv["executor"] instanceof CharSequence
-    assert drctv["executor"] in ["local", "sge", "uge", "lsf", "slurm", "pbs", "pbspro", "moab", "condor", "nqsii", "ignite", "k8s", "awsbatch", "google-pipelines"] : "Unexpected value for executor"
-  }
-
-  /* DIRECTIVE machineType
-    accepted examples:
-    - "n1-highmem-8"
-  */
-  if (drctv.containsKey("machineType")) {
-    assert drctv["machineType"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE maxErrors
-    accepted examples:
-    - 1
-    - 3
-  */
-  if (drctv.containsKey("maxErrors")) {
-    assert drctv["maxErrors"] instanceof Integer
-  }
-
-  /* DIRECTIVE maxForks
-    accepted examples:
-    - 1
-    - 3
-  */
-  if (drctv.containsKey("maxForks")) {
-    assert drctv["maxForks"] instanceof Integer
-  }
-
-  /* DIRECTIVE maxRetries
-    accepted examples:
-    - 1
-    - 3
-  */
-  if (drctv.containsKey("maxRetries")) {
-    assert drctv["maxRetries"] instanceof Integer
-  }
-
-  /* DIRECTIVE memory
-    accepted examples:
-    - "1 GB"
-    - "2TB"
-    - "3.2KB"
-    - "10.B"
-  */
-  if (drctv.containsKey("memory")) {
-    assert drctv["memory"] instanceof CharSequence
-    // assert drctv["memory"].matches("[0-9]+(\\.[0-9]*)? *[KMGTPEZY]?B")
-    // ^ does not allow closures
-  }
-
-  /* DIRECTIVE module
-    accepted examples:
-    - "ncbi-blast/2.2.27"
-    - "ncbi-blast/2.2.27:t_coffee/10.0"
-    - ["ncbi-blast/2.2.27", "t_coffee/10.0"]
-  */
-  if (drctv.containsKey("module")) {
-    if (drctv["module"] instanceof List) {
-      drctv["module"] = drctv["module"].join(":")
-    }
-    assert drctv["module"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE penv
-    accepted examples:
-    - "smp"
-  */
-  if (drctv.containsKey("penv")) {
-    assert drctv["penv"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE pod
-    accepted examples:
-    - [ label: "key", value: "val" ]
-    - [ annotation: "key", value: "val" ]
-    - [ env: "key", value: "val" ]
-    - [ [label: "l", value: "v"], [env: "e", value: "v"]]
-  */
-  if (drctv.containsKey("pod")) {
-    if (drctv["pod"] instanceof Map) {
-      drctv["pod"] = [ drctv["pod"] ]
-    }
-    assert drctv["pod"] instanceof List
-    drctv["pod"].forEach { pod ->
-      assert pod instanceof Map
-      // TODO: should more checks be added?
-      // See https://www.nextflow.io/docs/latest/process.html?highlight=directives#pod
-      // e.g. does it contain 'label' and 'value', or 'annotation' and 'value', or ...?
-    }
-  }
-
-  /* DIRECTIVE publishDir
-    accepted examples:
-    - []
-    - [ [ path: "foo", enabled: true ], [ path: "bar", enabled: false ] ]
-    - "/path/to/dir" 
-      is transformed to [[ path: "/path/to/dir" ]]
-    - [ path: "/path/to/dir", mode: "cache" ]
-      is transformed to [[ path: "/path/to/dir", mode: "cache" ]]
-  */
-  // TODO: should we also look at params["publishDir"]?
-  if (drctv.containsKey("publishDir")) {
-    def pblsh = drctv["publishDir"]
-    
-    // check different options
-    assert pblsh instanceof List || pblsh instanceof Map || pblsh instanceof CharSequence
-    
-    // turn into list if not already so
-    // for some reason, 'if (!pblsh instanceof List) pblsh = [ pblsh ]' doesn't work.
-    pblsh = pblsh instanceof List ? pblsh : [ pblsh ]
-
-    // check elements of publishDir
-    pblsh = pblsh.collect{ elem ->
-      // turn into map if not already so
-      elem = elem instanceof CharSequence ? [ path: elem ] : elem
-
-      // check types and keys
-      assert elem instanceof Map : "Expected publish argument '$elem' to be a String or a Map. Found: class ${elem.getClass()}"
-      assertMapKeys(elem, [ "path", "mode", "overwrite", "pattern", "saveAs", "enabled" ], ["path"], "publishDir")
-
-      // check elements in map
-      assert elem.containsKey("path")
-      assert elem["path"] instanceof CharSequence
-      if (elem.containsKey("mode")) {
-        assert elem["mode"] instanceof CharSequence
-        assert elem["mode"] in [ "symlink", "rellink", "link", "copy", "copyNoFollow", "move" ]
-      }
-      if (elem.containsKey("overwrite")) {
-        assert elem["overwrite"] instanceof Boolean
-      }
-      if (elem.containsKey("pattern")) {
-        assert elem["pattern"] instanceof CharSequence
-      }
-      if (elem.containsKey("saveAs")) {
-        assert elem["saveAs"] instanceof CharSequence //: "saveAs as a Closure is currently not supported. Surround your closure with single quotes to get the desired effect. Example: '\{ foo \}'"
-      }
-      if (elem.containsKey("enabled")) {
-        assert elem["enabled"] instanceof Boolean
-      }
-
-      // return final result
-      elem
-    }
-    // store final directive
-    drctv["publishDir"] = pblsh
-  }
-
-  /* DIRECTIVE queue
-    accepted examples:
-    - "long"
-    - "short,long"
-    - ["short", "long"]
-  */
-  if (drctv.containsKey("queue")) {
-    if (drctv["queue"] instanceof List) {
-      drctv["queue"] = drctv["queue"].join(",")
-    }
-    assert drctv["queue"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE label
-    accepted examples:
-    - "big_mem"
-    - "big_cpu"
-    - ["big_mem", "big_cpu"]
-  */
-  if (drctv.containsKey("label")) {
-    if (drctv["label"] instanceof CharSequence) {
-      drctv["label"] = [ drctv["label"] ]
-    }
-    assert drctv["label"] instanceof List
-    drctv["label"].forEach { label ->
-      assert label instanceof CharSequence
-      // assert label.matches("[a-zA-Z0-9]([a-zA-Z0-9_]*[a-zA-Z0-9])?")
-      // ^ does not allow closures
-    }
-  }
-
-  /* DIRECTIVE scratch
-    accepted examples:
-    - true
-    - "/path/to/scratch"
-    - '$MY_PATH_TO_SCRATCH'
-    - "ram-disk"
-  */
-  if (drctv.containsKey("scratch")) {
-    assert drctv["scratch"] == true || drctv["scratch"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE storeDir
-    accepted examples:
-    - "/path/to/storeDir"
-  */
-  if (drctv.containsKey("storeDir")) {
-    assert drctv["storeDir"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE stageInMode
-    accepted examples:
-    - "copy"
-    - "link"
-  */
-  if (drctv.containsKey("stageInMode")) {
-    assert drctv["stageInMode"] instanceof CharSequence
-    assert drctv["stageInMode"] in ["copy", "link", "symlink", "rellink"]
-  }
-
-  /* DIRECTIVE stageOutMode
-    accepted examples:
-    - "copy"
-    - "link"
-  */
-  if (drctv.containsKey("stageOutMode")) {
-    assert drctv["stageOutMode"] instanceof CharSequence
-    assert drctv["stageOutMode"] in ["copy", "move", "rsync"]
-  }
-
-  /* DIRECTIVE tag
-    accepted examples:
-    - "foo"
-    - '$id'
-  */
-  if (drctv.containsKey("tag")) {
-    assert drctv["tag"] instanceof CharSequence
-  }
-
-  /* DIRECTIVE time
-    accepted examples:
-    - "1h"
-    - "2days"
-    - "1day 6hours 3minutes 30seconds"
-  */
-  if (drctv.containsKey("time")) {
-    assert drctv["time"] instanceof CharSequence
-    // todo: validation regex?
-  }
-
-  return drctv
+  def containerRegistryOverride = params.containsKey("override_container_registry") ? params["override_container_registry"] : null
+  return _processDirectivesWithOverride(drctv, containerRegistryOverride)
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/workflowFactory/processWorkflowArgs.nf'
@@ -2372,102 +1446,6 @@ def processWorkflowArgs(Map args, Map defaultWfArgs, Map meta) {
 
   // return output
   return workflowArgs
-}
-
-def _processFromState(fromState, key_, config_) {
-  assert fromState == null || fromState instanceof Closure || fromState instanceof Map || fromState instanceof List :
-    "Error in module '$key_': Expected process argument 'fromState' to be null, a Closure, a Map, or a List. Found: class ${fromState.getClass()}"
-  if (fromState == null) {
-    return null
-  }
-  
-  // if fromState is a List, convert to map
-  if (fromState instanceof List) {
-    // check whether fromstate is a list[string]
-    assert fromState.every{it instanceof CharSequence} : "Error in module '$key_': fromState is a List, but not all elements are Strings"
-    fromState = fromState.collectEntries{[it, it]}
-  }
-
-  // if fromState is a map, convert to closure
-  if (fromState instanceof Map) {
-    // check whether fromstate is a map[string, string]
-    assert fromState.values().every{it instanceof CharSequence} : "Error in module '$key_': fromState is a Map, but not all values are Strings"
-    assert fromState.keySet().every{it instanceof CharSequence} : "Error in module '$key_': fromState is a Map, but not all keys are Strings"
-    def fromStateMap = fromState.clone()
-    def allArgumentNames = config_.allArguments.collect{it.plainName}
-    def requiredInputNames = config_.allArguments.findAll{it.required && it.direction == "Input"}.collect{it.plainName}
-    // turn the map into a closure to be used later on
-    fromState = { it ->
-      def state = it[1]
-      assert state instanceof Map : "Error in module '$key_': the state is not a Map"
-      def data = fromStateMap.collectMany{newkey, origkey ->
-        if (!allArgumentNames.contains(newkey)) {
-          throw new Exception("Error processing fromState for '$key_': invalid argument '$newkey'")
-        }
-        // check whether newkey corresponds to a required argument
-        if (state.containsKey(origkey)) {
-          [[newkey, state[origkey]]]
-        } else if (!requiredInputNames.contains(origkey)) {
-          []
-        } else {
-          throw new Exception("Error in module '$key_': fromState key '$origkey' not found in current state")
-        }
-      }.collectEntries()
-      data
-    }
-  }
-  
-  return fromState
-}
-
-def _processToState(toState, key_, config_) {
-  if (toState == null) {
-    toState = { tup -> tup[1] }
-  }
-
-  // toState should be a closure, map[string, string], or list[string]
-  assert toState instanceof Closure || toState instanceof Map || toState instanceof List :
-    "Error in module '$key_': Expected process argument 'toState' to be a Closure, a Map, or a List. Found: class ${toState.getClass()}"
-
-  // if toState is a List, convert to map
-  if (toState instanceof List) {
-    // check whether toState is a list[string]
-    assert toState.every{it instanceof CharSequence} : "Error in module '$key_': toState is a List, but not all elements are Strings"
-    toState = toState.collectEntries{[it, it]}
-  }
-
-  // if toState is a map, convert to closure
-  if (toState instanceof Map) {
-    // check whether toState is a map[string, string]
-    assert toState.values().every{it instanceof CharSequence} : "Error in module '$key_': toState is a Map, but not all values are Strings"
-    assert toState.keySet().every{it instanceof CharSequence} : "Error in module '$key_': toState is a Map, but not all keys are Strings"
-    def toStateMap = toState.clone()
-    def allArgumentNames = config_.allArguments.collect{it.plainName}
-    def requiredOutputNames = config_.allArguments.findAll{it.required && it.direction == "Output"}.collect{it.plainName}
-    // turn the map into a closure to be used later on
-    toState = { it ->
-      def output = it[1]
-      def state = it[2]
-      assert output instanceof Map : "Error in module '$key_': the output is not a Map"
-      assert state instanceof Map : "Error in module '$key_': the state is not a Map"
-      def extraEntries = toStateMap.collectMany{newkey, origkey ->
-        if (!allArgumentNames.contains(origkey)) {
-          throw new Exception("Error processing toState for '$key_': invalid argument '$origkey'")
-        }
-        // check whether newkey corresponds to a required argument
-        if (output.containsKey(origkey)) {
-          [[newkey, output[origkey]]]
-        } else if (!requiredOutputNames.contains(origkey)) {
-          []
-        } else {
-          throw new Exception("Error in module '$key_': toState key '$origkey' not found in current output")
-        }
-      }.collectEntries()
-      state + extraEntries
-    }
-  }
-
-  return toState
 }
 
 // helper file: 'src/main/resources/io/viash/runners/nextflow/workflowFactory/workflowFactory.nf'
