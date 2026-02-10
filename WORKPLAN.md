@@ -1,14 +1,14 @@
-# viash_core Plugin Work Plan
+# viash-core Plugin Work Plan
 
 ## Goal
-Move ~2793 lines of duplicated VDSL3 helper code from each generated `main.nf` into the `viash_core` Nextflow plugin. This reduces code duplication (~95% of each generated file is identical), improves maintainability, and enables unit testing.
+Move ~2793 lines of duplicated VDSL3 helper code from each generated `main.nf` into the `viash-core` Nextflow plugin. This reduces code duplication (~95% of each generated file is identical), improves maintainability, and enables unit testing.
 
 ## Key Constraints
 - **Backwards compatibility**: The interface of viash nextflow modules must remain the same as much as possible.
 - **Nextflow 25.x compatibility**: Stricter API coming; design for it.
 - **Groovy vs Nextflow DSL**: Plugin code must be Groovy, not Nextflow DSL. Workflows/processes can't be defined in plugin code directly — only functions, operators, and factories.
 - **Externally-consumed functions**: `runEach`, `findStates`, `setState` are used by workflows that import viash modules. These must remain accessible after migration.
-- **Classes can't be `include`d from plugin**: Nextflow's `include { ... } from 'plugin/viash_core'` only works for `@Function`-annotated methods, not classes. Classes like `UnexpectedArgumentTypeException`, `IDChecker`, `CustomTraceObserver` must stay in `VDSL3Helper.nf` or be refactored into function calls.
+- **Classes can't be `include`d from plugin**: Nextflow's `include { ... } from 'plugin/viash-core'` only works for `@Function`-annotated methods, not classes. Classes like `UnexpectedArgumentTypeException`, `IDChecker`, `CustomTraceObserver` must stay in `VDSL3Helper.nf` or be refactored into function calls.
 
 ## Architecture Overview
 
@@ -26,7 +26,7 @@ Shared helpers extracted into a single file, per-module code slimmed down, confi
 
 ### Target state
 - **Plugin (`viash_core`)**: Contains all shared VDSL3 helper functions as Groovy classes/functions, exposed via `@Function`/`@Operator`/`@Factory`
-- **Generated `main.nf`**: Contains only component-specific code, importing helpers from the plugin via `include { ... } from 'plugin/viash_core'`
+- **Generated `main.nf`**: Contains only component-specific code, importing helpers from the plugin via `include { ... } from 'plugin/viash-core'`
 
 ## Plugin Package Structure
 

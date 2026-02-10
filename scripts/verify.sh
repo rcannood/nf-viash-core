@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick verification script for nf-viash plugin development
+# Quick verification script for viash_core plugin development
 # Run this after any change to verify everything still works.
 #
 # Usage: ./scripts/verify.sh [--quick|--full]
@@ -51,7 +51,7 @@ if [[ "$MODE" == "--full" ]]; then
     # Step 4: Integration test — run a simple pipeline with the plugin
     info "Running integration test..."
     if nextflow run "$PROJECT_DIR/validation/main.nf" \
-        -plugins nf-viash@0.1.0 \
+        -plugins viash-core@0.1.0 \
         2>&1 | tail -5 | grep -q -E "complete|Pipeline"; then
         pass "Integration test passed"
     else

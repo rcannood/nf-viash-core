@@ -10,7 +10,7 @@ Key context documents: `additional-info.md` (project goals/challenges), `WORKPLA
 
 - **Plugin source**: `src/main/groovy/dataintuitive/plugin/` — Groovy classes using Nextflow's plugin API
   - `ViashCorePlugin.groovy` — Plugin entry point (extends `BasePlugin`)
-  - `ViashCoreExtension.groovy` — Functions exposed via `@Function` annotation (importable in NF scripts via `include { fn } from 'plugin/viash_core'`)
+  - `ViashCoreExtension.groovy` — Functions exposed via `@Function` annotation (importable in NF scripts via `include { fn } from 'plugin/viash-core'`)
 - **Plugin tests**: `src/test/groovy/dataintuitive/plugin/` — Spock framework tests
 - **Active development target**: `viash-target-new/nextflow/` — The working copy where we develop against. This is the code we edit.
   - `viash-target-new/nextflow/VDSL3Helper.nf` — Extracted shared helper functions (~2480 lines). Imported by each module via `include { ... } from '../VDSL3Helper.nf'`.
