@@ -2912,16 +2912,19 @@ meta = [
     }
   ],
   "build_info" : {
-    "config" : "/home/rcannood/workspace/viash-io/viash_core/viash-src/test_wfs/concurrency/config.vsh.yaml",
+    "config" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src/test_wfs/concurrency/config.vsh.yaml",
     "runner" : "nextflow",
     "engine" : "native",
-    "output" : "viash-target/nextflow/test_wfs/concurrency",
+    "output" : "/home/rcannood/workspace/viash-io/nf-viash/viash-target/nextflow/test_wfs/concurrency",
     "viash_version" : "0.10.0-dev",
-    "git_commit" : "9873ecf2bfb409d039bc25160a50d07123b69913"
+    "git_commit" : "7b61b23a6a1cf624275d50637a99448dd429423f",
+    "git_remote" : "https://github.com/rcannood/nf-viash-core.git"
   },
   "package_config" : {
-    "source" : "viash-src",
-    "target" : "viash-target"
+    "name" : "viash_core",
+    "viash_version" : "0.10.0-dev",
+    "source" : "/home/rcannood/workspace/viash-io/nf-viash/viash-src",
+    "target" : "/home/rcannood/workspace/viash-io/nf-viash/viash-target"
   }
 }'''))
 ]

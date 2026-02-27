@@ -1,4 +1,4 @@
 name: viash_core
 source: viash-src
 target: viash-target
-viash_version: 0.9.6
+viash_version: 0.10.0-dev

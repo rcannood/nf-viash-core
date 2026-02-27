@@ -82,16 +82,19 @@ engines:
 - type: "native"
   id: "native"
 build_info:
-  config: "[anonymized]/config.vsh.yaml"
+  config: "viash-src/test_wfs/invalid_fromstate_argument/config.vsh.yaml"
   runner: "nextflow"
   engine: "native"
   output: "viash-target/nextflow/test_wfs/invalid_fromstate_argument"
   executable: "viash-target/nextflow/test_wfs/invalid_fromstate_argument/main.nf"
   viash_version: "0.10.0-dev"
-  git_commit: "9873ecf2bfb409d039bc25160a50d07123b69913"
+  git_commit: "7b61b23a6a1cf624275d50637a99448dd429423f"
+  git_remote: "https://github.com/rcannood/nf-viash-core.git"
   dependencies:
   - "viash-target/nextflow/sub_workflow"
 package_config:
+  name: "viash_core"
   info: null
+  viash_version: "0.10.0-dev"
   source: "viash-src"
   target: "viash-target"

@@ -1,99 +1,43 @@
-name: "step2"
+name: "multiple_output"
 argument_groups:
 - name: "Arguments"
   arguments:
   - type: "file"
-    name: "--input1"
+    name: "--input"
     info: null
     example:
-    - "input1.txt"
+    - "input.txt"
     must_exist: true
     create_parent: true
     required: true
     direction: "input"
-    multiple: false
+    multiple: true
     multiple_sep: ";"
   - type: "file"
-    name: "--input2"
+    name: "--output"
     info: null
     example:
-    - "input2.txt"
-    must_exist: true
-    create_parent: true
-    required: true
-    direction: "input"
-    multiple: false
-    multiple_sep: ";"
-  - type: "file"
-    name: "--optional"
-    info: null
-    example:
-    - "optional.txt"
-    must_exist: true
-    create_parent: true
-    required: false
-    direction: "input"
-    multiple: false
-    multiple_sep: ";"
-  - type: "file"
-    name: "--output1"
-    info: null
-    example:
-    - "output1.txt"
+    - "output_*.txt"
     must_exist: true
     create_parent: true
     required: true
     direction: "output"
-    multiple: false
-    multiple_sep: ";"
-  - type: "file"
-    name: "--output2"
-    info: null
-    example:
-    - "output2.txt"
-    must_exist: true
-    create_parent: true
-    required: true
-    direction: "output"
-    multiple: false
-    multiple_sep: ";"
-  - type: "string"
-    name: "--default_arg"
-    description: "This is the description that never ends.\n  §1234567890'^\n  °+\"\
-      *ç%&/()=?`$\"\"\"'''@\\\\//\\/\n\\n\\r\\t\\s\\\n"
-    info: null
-    default:
-    - "This is the description that never ends.\n  §1234567890^\n  °+\"*ç%&/()=?`$\"\
-      \"\"@\\\\//\\/\n\\n\\r\\t\\s\\\n"
-    required: false
-    direction: "input"
-    multiple: false
-    multiple_sep: ";"
-  - type: "string"
-    name: "--example"
-    info: null
-    example:
-    - "This is the description that never ends.\n  §1234567890'^\n  °+\"*ç%&/()=?`$\"\
-      \"\"'''@\\\\//\\/\n\\n\\r\\t\\s\\\n"
-    required: false
-    direction: "input"
-    multiple: false
+    multiple: true
     multiple_sep: ";"
 resources:
 - type: "bash_script"
   path: "script.sh"
   is_executable: true
   use_jq: true
-description: "This is the description that never ends.\n  §1234567890'^\n  °+\"*ç\
-  %&/()=?`$\"\"\"'''@\\\\//\\/\n\\n\\r\\t\\s\\\n"
-usage: "This is the description that never ends.\n  §1234567890'^\n  °+\"*ç%&/()=?`$\"\
-  \"\"'''@\\\\//\\/\n\\n\\r\\t\\s\\\n"
 info: null
 status: "enabled"
 scope:
   image: "public"
   target: "public"
 runners:
+- type: "executable"
+  id: "executable"
+  docker_setup_strategy: "ifneedbepullelsecachedbuild"
 - type: "nextflow"
   id: "nextflow"
   directives:
@@ -169,11 +113,11 @@ engines:
   entrypoint: []
   cmd: null
 build_info:
-  config: "viash-src/step2/config.vsh.yaml"
-  runner: "nextflow"
+  config: "viash-src/multiple_output/config.vsh.yaml"
+  runner: "executable"
   engine: "native|docker"
-  output: "viash-target/nextflow/step2"
-  executable: "viash-target/nextflow/step2/main.nf"
+  output: "viash-target/executable/multiple_output"
+  executable: "viash-target/executable/multiple_output/multiple_output"
   viash_version: "0.10.0-dev"
   git_commit: "7b61b23a6a1cf624275d50637a99448dd429423f"
   git_remote: "https://github.com/rcannood/nf-viash-core.git"
