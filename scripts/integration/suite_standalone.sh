@@ -10,9 +10,10 @@ run_standalone_tests() {
   local publish_dir
 
   # ── Simple run ──────────────────────────────────────────────────────
-  local test_name="standalone: Simple run of step2"
+  # Original: test("Simple run", NextflowTest)
+  local test_name="standalone: Simple run"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_simple"
+    publish_dir="$TEST_WORKDIR/moduleOutput1"
     nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/step2/main.nf" \
       --input1 "$RESOURCES_DIR/lines3.txt" \
@@ -30,9 +31,10 @@ run_standalone_tests() {
   fi
 
   # ── ID with spaces and slashes ──────────────────────────────────────
-  test_name="standalone: ID with spaces and slashes"
+  # Original: test("With id containing spaces and slashes", NextflowTest)
+  test_name="standalone: With id containing spaces and slashes"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_spaces"
+    publish_dir="$TEST_WORKDIR/moduleOutput2"
     nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/step2/main.nf" \
       --id "one two three/four five six/seven eight nine" \
@@ -52,9 +54,10 @@ run_standalone_tests() {
   fi
 
   # ── Output ID and key keywords ─────────────────────────────────────
-  test_name="standalone: Output with \$id and \$key keywords"
+  # Original: test("With output id and key keywords", NextflowTest)
+  test_name="standalone: With output id and key keywords"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_keywords"
+    publish_dir="$TEST_WORKDIR/moduleOutput3"
     nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/step2/main.nf" \
       --id foo \
@@ -74,9 +77,10 @@ run_standalone_tests() {
   fi
 
   # ── With yamlblob param_list ────────────────────────────────────────
-  test_name="standalone: yamlblob param_list"
+  # Original: test("With yamlblob param_list", NextflowTest)
+  test_name="standalone: With yamlblob param_list"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_yamlblob"
+    publish_dir="$TEST_WORKDIR/moduleOutput4"
     nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/step2/main.nf" \
       --param_list "[{input1: $RESOURCES_DIR/lines3.txt, input2: $RESOURCES_DIR/lines5.txt}]" \
@@ -92,17 +96,30 @@ run_standalone_tests() {
     fi
   fi
 
-  # ── With yaml file param_list ───────────────────────────────────────
-  test_name="standalone: yaml file param_list"
+  # ── With yaml param_list ────────────────────────────────────────────
+  # Original: test("With yaml param_list", NextflowTest)
+  # Creates a param_list.yaml with relative paths, resolved relative to the yaml file location
+  test_name="standalone: With yaml param_list"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_yaml_file"
-    local param_list="$RESOURCES_DIR/pipeline3.yaml"
-    nf_run_cwd "$RESOURCES_DIR" \
+    publish_dir="$TEST_WORKDIR/moduleOutput5"
+    # Create a param_list.yaml alongside the resource files
+    local yaml_dir="$TEST_WORKDIR/yaml_paramlist"
+    mkdir -p "$yaml_dir"
+    ln -sf "$RESOURCES_DIR/lines3.txt" "$yaml_dir/lines3.txt"
+    ln -sf "$RESOURCES_DIR/lines5.txt" "$yaml_dir/lines5.txt"
+    cat > "$yaml_dir/param_list.yaml" <<'YAML'
+- input1: lines3.txt
+  input2: lines5.txt
+YAML
+
+    nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/step2/main.nf" \
-      --param_list "$param_list" \
+      --param_list "$yaml_dir/param_list.yaml" \
       --publish_dir "$publish_dir"
 
-    if [[ $NF_EXIT -eq 0 ]]; then
+    if [[ $NF_EXIT -eq 0 ]] && \
+       assert_file_exists "$publish_dir/run.step2.output1.txt" && \
+       assert_file_content "$publish_dir/run.step2.output1.txt" "one,two,three"; then
       pass "$test_name"
     else
       fail "$test_name" "exit=$NF_EXIT"
@@ -111,15 +128,18 @@ run_standalone_tests() {
   fi
 
   # ── With optional inputs ────────────────────────────────────────────
-  test_name="standalone: Optional inputs"
+  # Original: test("With optional inputs", NextflowTest)
+  test_name="standalone: With optional inputs"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_optional"
-    cp "$RESOURCES_DIR/lines5.txt" "$TEST_WORKDIR/lines5-bis.txt"
+    publish_dir="$TEST_WORKDIR/moduleOutput6"
+    local optional_file="$TEST_WORKDIR/lines5-bis.txt"
+    cp "$RESOURCES_DIR/lines5.txt" "$optional_file"
+
     nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/step2/main.nf" \
       --input1 "$RESOURCES_DIR/lines3.txt" \
       --input2 "$RESOURCES_DIR/lines5.txt" \
-      --optional "$TEST_WORKDIR/lines5-bis.txt" \
+      --optional "$optional_file" \
       --publish_dir "$publish_dir"
 
     if [[ $NF_EXIT -eq 0 ]] && \
@@ -133,19 +153,38 @@ run_standalone_tests() {
   fi
 
   # ── Multiple output ────────────────────────────────────────────────
-  test_name="standalone: Multiple output"
+  # Original: test("Run multiple output test", NextflowTest)
+  test_name="standalone: Run multiple output test"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_multi_output"
+    publish_dir="$TEST_WORKDIR/multipleOutput"
     nf_run_cwd "$PROJECT_DIR" \
       "$TARGET_DIR/multiple_output/main.nf" \
       --id foo \
       --input "$RESOURCES_DIR/lines*.txt" \
       --publish_dir "$publish_dir"
 
+    local state_file="$publish_dir/foo.multiple_output.state.yaml"
+    local output0_file="$publish_dir/foo.multiple_output.output_0.txt"
+    local output1_file="$publish_dir/foo.multiple_output.output_1.txt"
+
     if [[ $NF_EXIT -eq 0 ]] && \
-       assert_file_exists "$publish_dir/foo.multiple_output.output_0.txt" && \
-       assert_file_exists "$publish_dir/foo.multiple_output.output_1.txt"; then
-      pass "$test_name"
+       assert_file_exists "$state_file" && \
+       assert_file_exists "$output0_file" && \
+       assert_file_exists "$output1_file"; then
+      # Check state.yaml content
+      local state_content
+      state_content=$(cat "$state_file")
+      local expected_state
+      expected_state=$(printf "id: foo\noutput:\n- !file 'foo.multiple_output.output_0.txt'\n- !file 'foo.multiple_output.output_1.txt'")
+      if [[ "$state_content" == "$expected_state" ]]; then
+        pass "$test_name"
+      else
+        fail "$test_name" "state.yaml content mismatch"
+        if [[ "$VERBOSE" == "true" ]]; then
+          echo "       Expected: $expected_state" >&2
+          echo "       Actual:   $state_content" >&2
+        fi
+      fi
     else
       fail "$test_name" "exit=$NF_EXIT"
       show_failure "$test_name"
@@ -153,9 +192,10 @@ run_standalone_tests() {
   fi
 
   # ── Integer as double ──────────────────────────────────────────────
-  test_name="standalone: Integer converted to double"
+  # Original: test("Whether integers can be converted to doubles", NextflowTest)
+  test_name="standalone: Whether integers can be converted to doubles"
   if should_run "$test_name"; then
-    publish_dir="$TEST_WORKDIR/standalone_int_double"
+    publish_dir="$TEST_WORKDIR/integerAsDouble"
     local params_file="$TEST_WORKDIR/int_double_params.yaml"
     cat > "$params_file" <<EOF
 id: foo
@@ -163,6 +203,7 @@ input: $RESOURCES_DIR/lines3.txt
 double: 10
 publish_dir: $publish_dir
 EOF
+
     nf_run_params \
       "$TARGET_DIR/integer_as_double/main.nf" \
       "$params_file"
@@ -170,22 +211,6 @@ EOF
     if [[ $NF_EXIT -eq 0 ]] && \
        assert_file_exists "$publish_dir/foo.integer_as_double.output.txt" && \
        assert_file_content "$publish_dir/foo.integer_as_double.output.txt" "one,two,three,Double: 10.0"; then
-      pass "$test_name"
-    else
-      fail "$test_name" "exit=$NF_EXIT"
-      show_failure "$test_name"
-    fi
-  fi
-
-  # ── Help output ────────────────────────────────────────────────────
-  test_name="standalone: --help does not error"
-  if should_run "$test_name"; then
-    nf_run_cwd "$PROJECT_DIR" \
-      "$TARGET_DIR/step2/main.nf" \
-      -q \
-      --help
-
-    if [[ $NF_EXIT -eq 0 ]]; then
       pass "$test_name"
     else
       fail "$test_name" "exit=$NF_EXIT"

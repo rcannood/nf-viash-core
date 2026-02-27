@@ -60,6 +60,7 @@ cleanup() {
 # Run a nextflow workflow and capture exit code + stdout + stderr
 # Usage: nf_run <main_script> [args...]
 # Sets: NF_EXIT, NF_STDOUT, NF_STDERR
+# Set NF_QUIET=true before calling for quiet mode (-q before 'run')
 nf_run() {
   local main_script="$1"
   shift
@@ -68,8 +69,13 @@ nf_run() {
   local stdout_file="$TEST_WORKDIR/.nf_stdout"
   local stderr_file="$TEST_WORKDIR/.nf_stderr"
 
+  local quiet_args=()
+  if [[ "${NF_QUIET:-}" == "true" ]]; then
+    quiet_args=("-q")
+  fi
+
   NF_EXIT=0
-  nextflow run "." \
+  nextflow "${quiet_args[@]}" run "." \
     -main-script "$main_script" \
     "${args[@]}" \
     >"$stdout_file" 2>"$stderr_file" || NF_EXIT=$?
@@ -80,6 +86,7 @@ nf_run() {
 
 # Run from a specific working directory
 # Usage: nf_run_cwd <cwd> <main_script> [args...]
+# Set NF_QUIET=true before calling for quiet mode (-q before 'run')
 nf_run_cwd() {
   local cwd="$1"
   local main_script="$2"
@@ -89,8 +96,13 @@ nf_run_cwd() {
   local stdout_file="$TEST_WORKDIR/.nf_stdout"
   local stderr_file="$TEST_WORKDIR/.nf_stderr"
 
+  local quiet_args=()
+  if [[ "${NF_QUIET:-}" == "true" ]]; then
+    quiet_args=("-q")
+  fi
+
   NF_EXIT=0
-  (cd "$cwd" && nextflow run "." \
+  (cd "$cwd" && nextflow "${quiet_args[@]}" run "." \
     -main-script "$main_script" \
     "${args[@]}" \
     >"$stdout_file" 2>"$stderr_file") || NF_EXIT=$?
@@ -101,6 +113,7 @@ nf_run_cwd() {
 
 # Run with -params-file
 # Usage: nf_run_params <main_script> <params_file> [args...]
+# Set NF_QUIET=true before calling for quiet mode (-q before 'run')
 nf_run_params() {
   local main_script="$1"
   local params_file="$2"
@@ -110,8 +123,13 @@ nf_run_params() {
   local stdout_file="$TEST_WORKDIR/.nf_stdout"
   local stderr_file="$TEST_WORKDIR/.nf_stderr"
 
+  local quiet_args=()
+  if [[ "${NF_QUIET:-}" == "true" ]]; then
+    quiet_args=("-q")
+  fi
+
   NF_EXIT=0
-  nextflow run "." \
+  nextflow "${quiet_args[@]}" run "." \
     -main-script "$main_script" \
     -params-file "$params_file" \
     "${args[@]}" \
@@ -185,4 +203,132 @@ assert_stdout_not_contains() {
     echo "       Expected stdout NOT to contain: $unexpected" >&2
     return 1
   fi
+}
+
+# ─── DEBUG output parsing (mirrors NextflowTestHelper.scala) ─────────────────
+
+# Find a DEBUG line for a specific id in NF_STDOUT
+# Matches lines like: KEYWORD: [id, [key:value, ...]]
+# Usage: find_debug_line "foo" ["DEBUG"]
+# Sets: FOUND_DEBUG_LINE or returns 1 if not found
+find_debug_line() {
+  local id="$1"
+  local keyword="${2:-DEBUG}"
+  FOUND_DEBUG_LINE=$(echo "$NF_STDOUT" | grep "^${keyword}: \[${id}, \[" | head -1)
+  [[ -n "$FOUND_DEBUG_LINE" ]]
+}
+
+# Assert that a key has an exact value in a DEBUG line
+# Mirrors: EqualsCheck(name, value)
+# Usage: assert_debug_kv "$FOUND_DEBUG_LINE" "key" "value"
+assert_debug_kv() {
+  local line="$1"
+  local key="$2"
+  local value="$3"
+  if echo "$line" | grep -qF "${key}:${value}"; then
+    return 0
+  fi
+  echo "       assert_debug_kv: expected ${key}:${value}" >&2
+  echo "       in: ${line}" >&2
+  return 1
+}
+
+# Assert that a key's value matches a regex in a DEBUG line
+# Mirrors: MatchCheck(name, regex)
+# Usage: assert_debug_match "$FOUND_DEBUG_LINE" "key" "regex_pattern"
+assert_debug_match() {
+  local line="$1"
+  local key="$2"
+  local pattern="$3"
+  if echo "$line" | grep -qE "${key}:${pattern}"; then
+    return 0
+  fi
+  echo "       assert_debug_match: expected ${key}: to match ${pattern}" >&2
+  echo "       in: ${line}" >&2
+  return 1
+}
+
+# Assert that a key does NOT exist in a DEBUG line
+# Mirrors: NotAvailCheck(name)
+# Usage: assert_debug_notavail "$FOUND_DEBUG_LINE" "key"
+assert_debug_notavail() {
+  local line="$1"
+  local key="$2"
+  # Check for key: preceded by ', ' or '[' (Groovy Map.toString() format)
+  if ! echo "$line" | grep -qE "(, |\[)${key}:"; then
+    return 0
+  fi
+  echo "       assert_debug_notavail: ${key} should not exist" >&2
+  echo "       in: ${line}" >&2
+  return 1
+}
+
+# Check all expected debug args for a given id
+# Mirrors: checkDebugArgs(id, debugPrints, expectedValues)
+# Usage: check_debug_args "foo" "DEBUG" "equals:real_number:10.5" "match:input:.*/lines3.txt" "notavail:reality"
+# Returns 0 if all checks pass, 1 if any fail
+check_debug_args() {
+  local id="$1"
+  local keyword="$2"
+  shift 2
+
+  if ! find_debug_line "$id" "$keyword"; then
+    echo "       check_debug_args: no DEBUG line found for id=$id keyword=$keyword" >&2
+    return 1
+  fi
+
+  local all_ok=true
+  for check in "$@"; do
+    local type="${check%%:*}"
+    local rest="${check#*:}"
+    local key="${rest%%:*}"
+    local value="${rest#*:}"
+
+    case "$type" in
+      equals)
+        if ! assert_debug_kv "$FOUND_DEBUG_LINE" "$key" "$value"; then
+          all_ok=false
+        fi
+        ;;
+      match)
+        if ! assert_debug_match "$FOUND_DEBUG_LINE" "$key" "$value"; then
+          all_ok=false
+        fi
+        ;;
+      notavail)
+        # For notavail, there's no value; 'key' is extracted from 'rest' which is just the key
+        if ! assert_debug_notavail "$FOUND_DEBUG_LINE" "$rest"; then
+          all_ok=false
+        fi
+        ;;
+      *)
+        echo "       check_debug_args: unknown check type: $type" >&2
+        all_ok=false
+        ;;
+    esac
+  done
+
+  $all_ok
+}
+
+# Assert that the input path for an id ends with a specific suffix
+# Mirrors the endsWith assertion in WorkflowHelperTest
+# Usage: assert_debug_input_endswith "foo" "/resources/lines3.txt" ["DEBUG"]
+assert_debug_input_endswith() {
+  local id="$1"
+  local suffix="$2"
+  local keyword="${3:-DEBUG}"
+
+  find_debug_line "$id" "$keyword" || return 1
+
+  # Extract input value: match input:/path up to next comma-key or end
+  local input_path
+  input_path=$(echo "$FOUND_DEBUG_LINE" | grep -oE "input:[^,\]]*" | head -1 | sed 's/^input://')
+
+  if [[ "$input_path" == *"$suffix" ]]; then
+    return 0
+  fi
+  echo "       assert_debug_input_endswith: expected input to end with ${suffix}" >&2
+  echo "       got: ${input_path}" >&2
+  return 1
 }
