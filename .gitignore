@@ -3,6 +3,7 @@
 .idea
 .nextflow*
 .vscode
+nextflow-repo/
 
 # Ignore Gradle build output directory
 build
