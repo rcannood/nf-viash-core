@@ -49,13 +49,21 @@ if [[ "$MODE" == "--full" ]]; then
     fi
 
     # Step 4: Integration test — run a simple pipeline with the plugin
-    info "Running integration test..."
+    info "Running plugin validation test..."
     if nextflow run "$PROJECT_DIR/validation/main.nf" \
         -plugins viash-core@0.1.0 \
         2>&1 | tail -5 | grep -q -E "complete|Pipeline"; then
-        pass "Integration test passed"
+        pass "Plugin validation test passed"
     else
-        fail "Integration test failed"
+        fail "Plugin validation test failed"
+    fi
+
+    # Step 5: Integration tests — run viash-equivalent test suites
+    info "Running integration tests (mirroring viash test suites)..."
+    if "$PROJECT_DIR/scripts/integration/run.sh"; then
+        pass "Integration tests passed"
+    else
+        fail "Integration tests failed"
     fi
 fi
 
