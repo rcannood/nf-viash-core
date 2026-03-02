@@ -42,6 +42,7 @@ jobs:
 
       - name: Install Nextflow
         uses: nf-core/setup-nextflow@v2
+        # use same version as in build.gradle
         with:
           version: '24.10.9'
 
