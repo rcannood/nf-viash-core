@@ -54,12 +54,24 @@ run_cross_validation() {
         fail "$test_name" "Both failed with exit=$new_exit"
       else
         # Compare output files
-        local diff_output
-        diff_output=$(diff -rq "$pub_new" "$pub_ref" 2>&1 || true)
-        if [[ -z "$diff_output" ]]; then
-          pass "$test_name"
+        # For step3, wc -l includes the temp filename in output — compare only the line count (field 1)
+        if [[ "$mod" == "step3" ]]; then
+          local new_count ref_count
+          new_count=$(awk '{print $1}' "$pub_new"/foo.step3.output.txt 2>/dev/null || true)
+          ref_count=$(awk '{print $1}' "$pub_ref"/foo.step3.output.txt 2>/dev/null || true)
+          if [[ "$new_count" == "$ref_count" ]] && [[ -n "$new_count" ]]; then
+            pass "$test_name"
+          else
+            fail "$test_name" "Line counts differ: new='$new_count' ref='$ref_count'"
+          fi
         else
-          fail "$test_name" "Output files differ: $diff_output"
+          local diff_output
+          diff_output=$(diff -rq "$pub_new" "$pub_ref" 2>&1 || true)
+          if [[ -z "$diff_output" ]]; then
+            pass "$test_name"
+          else
+            fail "$test_name" "Output files differ: $diff_output"
+          fi
         fi
       fi
     fi
