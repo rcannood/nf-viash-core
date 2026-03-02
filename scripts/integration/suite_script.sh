@@ -37,6 +37,7 @@ run_script_tests() {
     local symlink_dir="$TEST_WORKDIR/workflowsAsSymlink"
     mkdir -p "$symlink_dir"
     ln -sfn "$TARGET_DIR/wf" "$symlink_dir/workflow"
+    ln -sfn "$TARGET_DIR/VDSL3Helper.nf" "$symlink_dir/VDSL3Helper.nf"
 
     nf_run_cwd "$PROJECT_DIR" \
       "$symlink_dir/workflow/main.nf" \
@@ -61,6 +62,7 @@ run_script_tests() {
     local symlink_dir="$TEST_WORKDIR/nestedWorkflowsAsSymlink"
     mkdir -p "$symlink_dir"
     ln -sfn "$TARGET_DIR/test_wfs" "$symlink_dir/workflow"
+    ln -sfn "$TARGET_DIR/VDSL3Helper.nf" "$symlink_dir/VDSL3Helper.nf"
 
     nf_run_cwd "$PROJECT_DIR" \
       "$symlink_dir/workflow/nested/main.nf" \

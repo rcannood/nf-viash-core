@@ -323,7 +323,7 @@ assert_debug_input_endswith() {
 
   # Extract input value: match input:/path up to next comma-key or end
   local input_path
-  input_path=$(echo "$FOUND_DEBUG_LINE" | grep -oE "input:[^,\]]*" | head -1 | sed 's/^input://')
+  input_path=$(echo "$FOUND_DEBUG_LINE" | grep -oE 'input:[^],]*' | head -1 | sed 's/^input://')
 
   if [[ "$input_path" == *"$suffix" ]]; then
     return 0
